@@ -1,0 +1,23 @@
+{
+  "name": "ochrestra",
+  "version": "1.0.0",
+  "description": "Realtime synced orchestration environment for multiple opencode terminals — a shared event bus with a PCB-style live dashboard.",
+  "main": "server/hub.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server/hub.js",
+    "demo": "node scripts/demo-agents.js",
+    "board": "node cli/ochre.js board",
+    "mcp": "node mcp/server.js",
+    "mcp-install": "node scripts/install-mcp.mjs"
+  },
+  "keywords": ["opencode", "orchestration", "websocket", "multi-agent", "sync"],
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.4",
+    "ws": "^8.18.0"
+  }
+}
