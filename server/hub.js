@@ -497,9 +497,13 @@ server.on('upgrade', (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
 });
 
-server.listen(cfg.port, cfg.host, () => {
-  console.log(`[ochrestra] hub online  ws://${cfg.host}:${cfg.port}${BUS_PATH}`);
-  console.log(`[ochrestra] board     http://${cfg.host}:${cfg.port}`);
+// cloud hosts (Railway/Render/Fly) inject PORT and require binding 0.0.0.0
+const listenPort = Number(process.env.PORT) || cfg.port;
+const listenHost = process.env.HOST || (process.env.PORT ? '0.0.0.0' : cfg.host);
+
+server.listen(listenPort, listenHost, () => {
+  console.log(`[ochrestra] hub online  ws://${listenHost}:${listenPort}${BUS_PATH}`);
+  console.log(`[ochrestra] board     http://${listenHost}:${listenPort}`);
   console.log(`[ochrestra] state dir  ./${cfg.persistDir}/  (${store.events.length} events replayed, ${store.state.size} keys)`);
 });
 
