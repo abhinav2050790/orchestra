@@ -11,13 +11,20 @@
     "mcp": "node mcp/server.js",
     "mcp-install": "node scripts/install-mcp.mjs"
   },
-  "keywords": ["opencode", "orchestration", "websocket", "multi-agent", "sync"],
+  "keywords": [
+    "opencode",
+    "orchestration",
+    "websocket",
+    "multi-agent",
+    "sync"
+  ],
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.62.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
+    "opencode-ai": "^1.18.22",
     "ws": "^8.18.0"
   }
 }
