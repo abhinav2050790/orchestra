@@ -593,10 +593,10 @@ const server = http.createServer(async (req, res) => {
         // opens the real OS folder picker on the machine running the hub
         if (process.platform !== 'win32') return json(res, 501, { error: 'native folder picker only exists on the local hub — type the path manually' });
         const ps = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command',
-          "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Assign ORCHESTRA workspace folder'; if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}"
+          "Add-Type -AssemblyName System.Windows.Forms; $o=New-Object System.Windows.Forms.Form; $o.TopMost=$true; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Assign ORCHESTRA workspace folder'; if($d.ShowDialog($o) -eq 'OK'){$d.SelectedPath}"
         ], { windowsHide: true });
         let out = '';
-        const timer = setTimeout(() => { try { ps.kill(); } catch { /* */ } json(res, 200, { path: null }); }, 180000);
+        const timer = setTimeout(() => { try { ps.kill(); } catch { /* */ } json(res, 200, { path: null }); }, 60000);
         ps.stdout.on('data', (d) => { out += d; });
         ps.on('error', () => { clearTimeout(timer); try { json(res, 200, { path: null }); } catch { /* */ } });
         ps.on('close', () => {

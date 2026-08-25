@@ -553,21 +553,29 @@ $('#dir-fallback').addEventListener('change', async (e) => {
   } catch (err) { alert(err.message); }
 });
 
+let browsing = false;
 $('#gate-browse').addEventListener('click', async () => {
+  if (browsing) return;
+  browsing = true;
   const b = $('#gate-browse');
   b.disabled = true;
+  // unlock fast — the pickers/dialogs are modal on their own and must never leave the button stuck
+  setTimeout(() => { b.disabled = false; browsing = false; }, 1200);
   try {
     if (!isLocalHub) {
       await cloudPick(); // cloud hub → pick in YOUR browser, your disk
       return;
     }
-    const j = await (await fetch('/api/workspace/browse')).json();
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 75000);
+    const j = await (await fetch('/api/workspace/browse', { signal: ctrl.signal })).json();
+    clearTimeout(timer);
     if (j.error) throw new Error(j.error);
     if (j.path) { $('#gate-path').value = j.path; $('#gate-err').hidden = true; }
   } catch (e) {
-    if (e.name === 'AbortError') return; // user closed the picker
+    if (e.name === 'AbortError') { const err = $('#gate-err'); err.textContent = 'folder dialog timed out — type the path manually'; err.hidden = false; return; }
     const err = $('#gate-err'); err.textContent = e.message; err.hidden = false;
-  } finally { b.disabled = false; }
+  }
 });
 
 $('#btn-folder').addEventListener('click', () => showGate());
