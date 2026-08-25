@@ -77,6 +77,7 @@ setInterval(() => {
 function emit(kind, payload, from) {
   const ev = store.pushEvent({ kind, from: from || 'hub', ...payload });
   broadcast({ t: 'ev', e: ev });
+  if (['spawn', 'exit', 'status', 'task', 'msg', 'state-set', 'state-del'].includes(kind)) wsDirty = true;
   return ev;
 }
 
@@ -121,7 +122,7 @@ function spawnWorker({ prompt, model, name }) {
   cmdline = base.map(quote).join(' ');
 
   const child = spawn(cmdline, {
-    cwd: ROOT,
+    cwd: (workspace && workspace.projectDir) || ROOT, // worker output lands in the assigned project folder
     shell: true,
     env: {
       ...process.env,
@@ -239,6 +240,52 @@ function openAgentTerminal(id) {
   launchTerminalWindow({ title: `OCHRE-${safeName}`, batFile: file });
   return { tid, agent: serializeAgent(a) };
 }
+
+// ---------- workspace (assigned folder, projects, handoff file) ----------
+const wsFile = () => path.join(ROOT, cfg.persistDir, 'workspace.json');
+let workspace = null;
+try { workspace = JSON.parse(fs.readFileSync(wsFile(), 'utf8')); } catch { /* not assigned yet */ }
+let wsDirty = !!workspace;
+
+const saveWorkspace = () => { try { fs.writeFileSync(wsFile(), JSON.stringify(workspace, null, 2)); } catch { /* */ } };
+
+function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'project'; }
+
+function ensureProject(name) {
+  const base = slugify(name);
+  let dir = path.join(workspace.root, base), i = 2;
+  while (fs.existsSync(dir)) dir = path.join(workspace.root, `${base}-${i++}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return path.basename(dir);
+}
+
+function renderHandoff() {
+  const L = ['# ORCHESTRA — SESSION HANDOFF', '', `> generated ${new Date().toLocaleString()} · project: **${workspace.project}**`, '', '## Agents'];
+  if (!agents.size) L.push('_none online_');
+  for (const a of agents.values()) {
+    L.push(`- **${a.name}** (${a.role}) — ${a.status}${a.task ? ` · task: ${String(a.task).slice(0, 140)}` : ''}${a.pid ? ` · pid ${a.pid}` : ''}`);
+  }
+  L.push('', '## Shared blackboard');
+  const st = store.snapshotState();
+  if (!Object.keys(st).length) L.push('_empty_');
+  for (const [k, e] of Object.entries(st)) L.push(`- \`${k}\` = ${JSON.stringify(e.v)} (rev${e.rev}, by ${e.by})`);
+  L.push('', '## Recent activity');
+  for (const e of store.recent(30).reverse()) {
+    const txt = e.text || e.key || e.prompt || '';
+    L.push(`- ${new Date(e.ts).toLocaleTimeString()} \`${e.from}\` ${e.kind}${txt ? `: ${String(txt).slice(0, 120)}` : ''}`);
+  }
+  return L.join('\n') + '\n';
+}
+
+function writeHandoff() {
+  if (!workspace) return;
+  try {
+    fs.writeFileSync(path.join(workspace.root, 'HANDOFF.md'), renderHandoff());
+    if (workspace.projectDir) fs.writeFileSync(path.join(workspace.projectDir, 'PROGRESS.md'), renderHandoff());
+    wsDirty = false;
+  } catch { /* folder may be transient */ }
+}
+setInterval(() => { if (wsDirty) writeHandoff(); }, 60000);
 
 // ---------- websocket bus ----------
 const wss = new WebSocketServer({ noServer: true });
@@ -477,6 +524,43 @@ const server = http.createServer(async (req, res) => {
         const entry = store.setState(String(b.key || ''), b.val, String(b.by || 'http'));
         emit('state-set', { key: b.key, entry }, 'http');
         return json(res, 200, entry);
+      }
+      if (req.method === 'GET' && p === '/api/workspace') {
+        return json(res, 200, workspace
+          ? { configured: true, root: workspace.root, project: workspace.project, projectDir: workspace.projectDir, projects: workspace.projects }
+          : { configured: false });
+      }
+      if (req.method === 'POST' && p === '/api/workspace') {
+        const b = await readBody(req);
+        let root = String(b.path || '').trim().replace(/^"|"$/g, '');
+        if (!root) return json(res, 400, { error: 'folder path required' });
+        try {
+          root = fs.realpathSync.native(path.resolve(root));
+        } catch {
+          const parent = path.dirname(path.resolve(root));
+          if (!fs.existsSync(parent)) return json(res, 400, { error: `parent folder does not exist: ${parent}` });
+        }
+        try { fs.mkdirSync(root, { recursive: true }); } catch (e) { return json(res, 400, { error: 'cannot use folder: ' + e.message }); }
+        workspace = { root, project: null, projectDir: null, projects: [], createdAt: now() };
+        const name = ensureProject(String(b.project || 'main'));
+        workspace.project = name;
+        workspace.projectDir = path.join(root, name);
+        workspace.projects.push(name);
+        saveWorkspace(); wsDirty = true; writeHandoff();
+        emit('msg', { to: '*', text: `workspace assigned → ${root} · project: ${name}` }, 'hub');
+        return json(res, 200, { configured: true, root, project: name, projectDir: workspace.projectDir, projects: workspace.projects });
+      }
+      if (req.method === 'POST' && p === '/api/workspace/project') {
+        if (!workspace) return json(res, 400, { error: 'assign a workspace folder first' });
+        const b = await readBody(req);
+        if (!String(b.name || '').trim()) return json(res, 400, { error: 'project name required' });
+        const name = ensureProject(b.name);
+        workspace.project = name;
+        workspace.projectDir = path.join(workspace.root, name);
+        if (!workspace.projects.includes(name)) workspace.projects.push(name);
+        saveWorkspace(); wsDirty = true; writeHandoff();
+        emit('msg', { to: '*', text: `switched project → ${name}` }, 'hub');
+        return json(res, 200, { configured: true, root: workspace.root, project: name, projectDir: workspace.projectDir, projects: workspace.projects });
       }
       if (req.method === 'POST' && p === '/api/terminals') {
         const b = await readBody(req);

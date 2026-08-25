@@ -399,6 +399,61 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'h' || e.key === 'H') $('#btn-help').click();
 });
 
+// ---------- workspace gate (mandatory folder assignment) ----------
+function applyWorkspace(j, quiet) {
+  window.__wsInfo = j;
+  document.body.classList.remove('gated');
+  $('#gate').hidden = true;
+  if (!quiet) sysNote(`workspace: ${j.root} · project: ${j.project}`);
+}
+
+function showGate() {
+  document.body.classList.add('gated');
+  $('#gate').hidden = false;
+  setTimeout(() => $('#gate-path').focus(), 60);
+}
+
+async function assignFolder() {
+  const err = $('#gate-err');
+  err.hidden = true;
+  const p = $('#gate-path').value.trim();
+  if (!p) { err.textContent = 'enter a folder path to continue'; err.hidden = false; return; }
+  const go = $('#gate-go');
+  go.disabled = true; go.textContent = 'ASSIGNING…';
+  try {
+    const r = await fetch('/api/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: p }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    applyWorkspace(j);
+    sysNote('workspace locked in — all worker files & HANDOFF.md land there');
+  } catch (e) {
+    err.textContent = e.message; err.hidden = false;
+  } finally { go.disabled = false; go.textContent = 'ASSIGN & START ▸'; }
+}
+$('#gate-go').addEventListener('click', assignFolder);
+$('#gate-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') assignFolder(); });
+
+$('#btn-project').addEventListener('click', async () => {
+  if (!window.__wsInfo?.configured) { showGate(); return; }
+  const name = prompt('New project name (a subfolder is created in your workspace):', 'project-' + new Date().toISOString().slice(0, 10));
+  if (!name) return;
+  try {
+    const r = await fetch('/api/workspace/project', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }) });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    applyWorkspace(j);
+    sysNote(`switched to project "${j.project}" — new workers write into it`);
+  } catch (e) { alert(e.message); }
+});
+
+(async () => {
+  try {
+    const j = await (await fetch('/api/workspace')).json();
+    if (j.configured) applyWorkspace(j, true); // returning user — straight in
+    else showGate();
+  } catch { showGate(); }
+})();
+
 connect();
 
 // debug/test introspection

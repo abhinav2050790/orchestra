@@ -1,0 +1,76 @@
+/* gate.css — mandatory workspace-folder assignment gate */
+
+body.gated #shell {
+  filter: blur(7px) saturate(.65);
+  pointer-events: none;
+  user-select: none;
+}
+
+#gate {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(2, 7, 4, .55);
+  backdrop-filter: blur(3px);
+}
+#gate[hidden] { display: none; }
+
+.gate-card {
+  width: min(460px, 92vw);
+  background: #081209;
+  border: 1px solid rgba(176, 141, 63, .6);
+  border-radius: 10px;
+  padding: 24px;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .75), inset 0 0 40px rgba(88, 232, 138, .03);
+}
+
+.gate-card h3 {
+  margin: 0 0 12px;
+  color: #eafff2;
+  font: 700 15px Consolas, monospace;
+  letter-spacing: .07em;
+}
+.gate-card h3::before { content: '⌬ '; color: #58e88a; }
+
+.gate-card p {
+  color: #9fc4ab;
+  font: 12px/1.65 Consolas, monospace;
+  margin: 0 0 16px;
+}
+
+#gate-path {
+  width: 100%;
+  box-sizing: border-box;
+  background: #04120a;
+  border: 1px solid rgba(120, 220, 155, .35);
+  border-radius: 6px;
+  color: #d9efdf;
+  font: 13px Consolas, monospace;
+  padding: 11px 12px;
+  outline: none;
+}
+#gate-path:focus { border-color: #58e88a; box-shadow: 0 0 0 3px rgba(88, 232, 138, .15); }
+
+#gate-err { color: #ff8f5e !important; font-weight: 700; margin: 10px 0 0 !important; }
+
+#gate-go {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+  margin-top: 14px;
+  padding: 11px;
+  border-radius: 6px;
+  background: linear-gradient(#123c22, #0c2917);
+  border: 1px solid rgba(88, 232, 138, .45);
+  color: #eafff2;
+  font: 700 13px Consolas, monospace;
+  letter-spacing: .06em;
+}
+#gate-go:hover { background: linear-gradient(#175230, #103823); box-shadow: 0 0 18px rgba(88, 232, 138, .25); }
+#gate-go:disabled { opacity: .5; cursor: wait; }
