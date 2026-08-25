@@ -341,6 +341,14 @@ setInterval(() => {
 
 fetch('/api/health').then((r) => r.json()).then(() => {}).catch(() => {});
 
+fetch('/api/config').then((r) => r.json()).then((c) => {
+  if (!c.workerModel) return;
+  const mi = $('#spawn-model');
+  mi.value = c.workerModel; // builds are pinned server-side — show it, don't allow changing it
+  mi.disabled = true;
+  mi.title = 'builds are pinned to this model';
+}).catch(() => {});
+
 // ---------- tabs ----------
 for (const btn of document.querySelectorAll('#tabs button')) {
   btn.addEventListener('click', () => {

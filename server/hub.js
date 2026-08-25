@@ -98,6 +98,7 @@ function uniqueId(base) {
 function quote(s) { return '"' + String(s).replace(/"/g, '\\"') + '"'; }
 
 function spawnWorker({ prompt, model, name }) {
+  model = cfg.workerModel || model; // builds run ONLY on the pinned model — callers cannot override
   const id = uniqueId('w-' + rid());
   const display = name || `OPCODE-${id.slice(-4).toUpperCase()}`;
   const agent = {
@@ -498,6 +499,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (p.startsWith('/api/')) {
       if (req.method === 'GET' && p === '/api/health') return json(res, 200, { ok: true, uptime: now() - startedAt, agents: agents.size });
+      if (req.method === 'GET' && p === '/api/config') return json(res, 200, { workerModel: cfg.workerModel || null });
       if (req.method === 'GET' && p === '/api/board') return json(res, 200, snapshot());
       if (req.method === 'GET' && p === '/api/events') {
         const since = Number(url.searchParams.get('since') || 0);

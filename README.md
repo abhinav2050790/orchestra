@@ -58,10 +58,10 @@ Stop everything: `.\Stop-Orchestra.ps1`
 `orchestra.config.json` — port, host, history limit, max workers, and the worker command template:
 
 ```json
-{ "workerCommand": ["opencode", "run", "{prompt}"] }
+{ "workerCommand": ["opencode", "run", "{prompt}"], "workerModel": "openrouter/stealth/ox-alpha" }
 ```
 
-Add `"--model", "{model}"` handling automatically when spawning with a model, or edit the template freely.
+`workerModel` pins every build to one model (server-enforced — spawn requests cannot override it). Add `"--model", "{model}"` handling automatically when spawning with a model, or edit the template freely.
 
 ## Files
 
