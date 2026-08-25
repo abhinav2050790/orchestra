@@ -253,6 +253,7 @@ function slugify(s) { return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-')
 
 function ensureProject(name) {
   const base = slugify(name);
+  if (workspace.browserManaged) return base; // folder lives on the visitor's machine
   let dir = path.join(workspace.root, base), i = 2;
   while (fs.existsSync(dir)) dir = path.join(workspace.root, `${base}-${i++}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -278,7 +279,7 @@ function renderHandoff() {
 }
 
 function writeHandoff() {
-  if (!workspace) return;
+  if (!workspace || workspace.browserManaged) return; // browser writes its own copies
   try {
     fs.writeFileSync(path.join(workspace.root, 'HANDOFF.md'), renderHandoff());
     if (workspace.projectDir) fs.writeFileSync(path.join(workspace.projectDir, 'PROGRESS.md'), renderHandoff());
@@ -534,6 +535,16 @@ const server = http.createServer(async (req, res) => {
         const b = await readBody(req);
         let root = String(b.path || '').trim().replace(/^"|"$/g, '');
         if (!root) return json(res, 400, { error: 'folder path required' });
+        // browser-managed workspace: the visitor's own folder, written by their browser
+        if (root.startsWith('browser://')) {
+          workspace = { root, project: null, projectDir: null, projects: [], createdAt: now(), browserManaged: true };
+          const name0 = ensureProject('main');
+          workspace.project = name0;
+          workspace.projects.push(name0);
+          saveWorkspace(); wsDirty = true;
+          emit('msg', { to: '*', text: `workspace linked (browser-managed) → ${root}` }, 'hub');
+          return json(res, 200, { configured: true, root, project: name0, projectDir: null, projects: workspace.projects });
+        }
         try {
           root = fs.realpathSync.native(path.resolve(root));
         } catch {
@@ -549,6 +560,11 @@ const server = http.createServer(async (req, res) => {
         saveWorkspace(); wsDirty = true; writeHandoff();
         emit('msg', { to: '*', text: `workspace assigned → ${root} · project: ${name}` }, 'hub');
         return json(res, 200, { configured: true, root, project: name, projectDir: workspace.projectDir, projects: workspace.projects });
+      }
+      if (req.method === 'GET' && p === '/api/handoff') {
+        if (!workspace) return json(res, 400, { error: 'workspace not assigned' });
+        res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' });
+        return res.end(renderHandoff());
       }
       if (req.method === 'GET' && p === '/api/workspace/browse') {
         // opens the real OS folder picker on the machine running the hub

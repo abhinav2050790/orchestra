@@ -430,16 +430,64 @@ async function assignFolder() {
     err.textContent = e.message; err.hidden = false;
   } finally { go.disabled = false; go.textContent = 'ASSIGN & START ▸'; }
 }
+const isLocalHub = ['127.0.0.1', 'localhost'].includes(location.hostname);
+
+// tiny IndexedDB for the folder handle (cloud boards)
+const idb = {
+  open() { return new Promise((res, rej) => { const r = indexedDB.open('orchestra-ws', 1); r.onupgradeneeded = () => r.result.createObjectStore('kv'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); },
+  async set(k, v) { const d = await this.open(); return new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); }); },
+  async get(k) { const d = await this.open(); return new Promise((res, rej) => { const q = d.transaction('kv', 'readonly').objectStore('kv').get(k); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); }); },
+};
+
 $('#gate-go').addEventListener('click', assignFolder);
 $('#gate-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') assignFolder(); });
+
+async function writeToFolder(handle, name, text) {
+  const fh = await handle.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+async function syncCloudFiles() {
+  try {
+    const h = await idb.get('wsHandle');
+    if (!h || !window.__wsInfo?.configured) return;
+    let perm = await h.queryPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') perm = await h.requestPermission({ mode: 'readwrite' });
+    if (perm !== 'granted') return;
+    const md = await (await fetch('/api/handoff')).text();
+    await writeToFolder(h, 'HANDOFF.md', md);
+    await writeToFolder(h, `${window.__wsInfo.project || 'main'}-PROGRESS.md`, md);
+  } catch { /* permission pending or tab hidden — retry next tick */ }
+}
+setInterval(syncCloudFiles, 60000);
+
+async function cloudPick() {
+  if (!window.showDirectoryPicker) throw new Error('this browser cannot open a native folder picker — use Chrome/Edge or type the path');
+  const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+  await idb.set('wsHandle', handle);
+  const r = await fetch('/api/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: 'browser://' + handle.name }) });
+  const j = await r.json();
+  if (j.error) throw new Error(j.error);
+  applyWorkspace(j);
+  sysNote(`folder "${handle.name}" linked — HANDOFF.md & progress will be written there`);
+  syncCloudFiles();
+}
+
 $('#gate-browse').addEventListener('click', async () => {
   const b = $('#gate-browse');
   b.disabled = true;
   try {
+    if (!isLocalHub) {
+      await cloudPick(); // cloud hub → pick in YOUR browser, your disk
+      return;
+    }
     const j = await (await fetch('/api/workspace/browse')).json();
     if (j.error) throw new Error(j.error);
     if (j.path) { $('#gate-path').value = j.path; $('#gate-err').hidden = true; }
   } catch (e) {
+    if (e.name === 'AbortError') return; // user closed the picker
     const err = $('#gate-err'); err.textContent = e.message; err.hidden = false;
   } finally { b.disabled = false; }
 });
@@ -460,8 +508,10 @@ $('#btn-project').addEventListener('click', async () => {
 (async () => {
   try {
     const j = await (await fetch('/api/workspace')).json();
-    if (j.configured) applyWorkspace(j, true); // returning user — straight in
-    else showGate();
+    if (j.configured) {
+      applyWorkspace(j, true); // returning user — straight in
+      if (!isLocalHub && String(j.root || '').startsWith('browser://')) syncCloudFiles();
+    } else showGate();
   } catch { showGate(); }
 })();
 
