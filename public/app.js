@@ -24,57 +24,97 @@ const board = new Board(wrap, $('#bg'), $('#fx'), {
   },
 });
 
-// ---------- chip click -> inline live console ----------
-let consoleAgent = null;
+// ---------- embedded terminals (windows on the PCB, wired to their chip) ----------
+const terms = new Map();   // agentId -> { el, pre, statusEl }
+let termCount = 0, zTop = 100;
 
-function acLine(e) {
-  const pre = $('#ac-log');
-  const t = hhmmss(e.ts || Date.now());
-  let text = '';
+function openTerm(id) {
+  let t = terms.get(id);
+  if (t) { t.el.style.zIndex = ++zTop; return t; }
+  const a = agents.get(id) || {};
+  const el = document.createElement('div');
+  el.className = 'term-win';
+  // panel sized relative to the chip footprint (chip = 148x84)
+  const w = Math.round(148 * 2.6), h = Math.round(84 * 3.1);
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  const wr = wrap.getBoundingClientRect();
+  const n = termCount++;
+  el.style.left = Math.min(18 + (n % 3) * (w + 16), Math.max(18, wr.width - w - 14)) + 'px';
+  el.style.top = Math.max(12, wr.height - h - 14 - Math.floor(n / 3) * (h * 0.35)) + 'px';
+  el.innerHTML = `
+    <div class="term-titlebar">
+      <span class="tl-dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span>
+      <span class="tl-name">${esc(String(a.name || id).toUpperCase())} — OCHRE SHELL</span>
+      <span class="tl-status">${esc(a.status || 'booting')}</span>
+      <button class="tl-close" title="hide terminal">&times;</button>
+    </div>
+    <div class="term-body"></div>`;
+  $('#term-layer').append(el);
+  t = { el, pre: el.querySelector('.term-body'), statusEl: el.querySelector('.tl-status') };
+  terms.set(id, t);
+  el.querySelector('.tl-close').addEventListener('click', () => closeTerm(id));
+  fetch('/api/events?limit=400').then((r) => r.json()).then((evs) => {
+    if (!terms.has(id)) return;
+    evs.filter((e) => e.from === id || e.agent?.id === id || e.id === id).forEach((e) => termLine(id, e));
+  }).catch(() => {});
+  requestAnimationFrame(() => measureTerm(id));
+  return t;
+}
+
+function closeTerm(id) {
+  const t = terms.get(id);
+  if (!t) return;
+  t.el.remove();
+  terms.delete(id);
+  board.syncTermRect(id, null);
+}
+
+function measureTerm(id) {
+  const t = terms.get(id);
+  if (!t) return;
+  const wr = wrap.getBoundingClientRect();
+  const pr = t.el.getBoundingClientRect();
+  board.syncTermRect(id, { x: pr.left - wr.left, y: pr.top - wr.top, w: pr.width, h: pr.height });
+}
+
+function termLine(id, e) {
+  const t = terms.get(id);
+  if (!t) return;
+  let text;
   switch (e.kind) {
     case 'log': text = e.text; break;
-    case 'msg': text = `→ ${e.to === '*' ? 'ALL' : e.to}: ${e.text}`; break;
-    case 'status': text = `status = ${e.status}${e.detail ? ' · ' + e.detail : ''}`; break;
-    case 'task': text = `task → ${(e.agent?.task || '').slice(0, 100)}`; break;
-    case 'spawn': text = `spawned — task: ${(e.prompt || '').slice(0, 100)}`; break;
-    case 'exit': text = `EXIT (${e.status})`; break;
+    case 'status':
+      text = `status: ${e.status}${e.detail ? ' — ' + e.detail : ''}`;
+      if (t.statusEl) t.statusEl.textContent = e.status;
+      break;
+    case 'task': text = `task: ${(e.agent?.task || '').slice(0, 100)}`; break;
+    case 'spawn': text = `$ ochre run "${String(e.prompt || '').slice(0, 100)}"`; break;
+    case 'exit':
+      text = e.status === 'done' ? 'process finished — exit 0' : `process exited (${e.code ?? '?'})`;
+      if (t.statusEl) t.statusEl.textContent = e.status;
+      break;
     default: return;
   }
   const div = document.createElement('div');
-  div.className = 'ac-row' + (e.kind === 'exit' ? ' ac-exit' : '');
-  div.textContent = `[${t}] ${text}`;
-  pre.append(div);
-  while (pre.childElementCount > 500) pre.firstChild.remove();
-  pre.scrollTop = pre.scrollHeight;
+  div.innerHTML = `<span class="t">[${hhmmss(e.ts || Date.now())}]</span> ${esc(text)}`;
+  t.pre.append(div);
+  while (t.pre.childElementCount > 400) t.pre.firstChild.remove();
+  t.pre.scrollTop = t.pre.scrollHeight;
 }
 
-function openConsole(id) {
-  consoleAgent = id;
-  const a = agents.get(id);
-  $('#ac-name').textContent = a?.name || id;
-  $('#ac-dot').style.background = a?.color || '#58e88a';
-  $('#ac-task').textContent = (a?.task || '').slice(0, 110);
-  $('#ac-log').innerHTML = '';
-  $('#agent-console').hidden = false;
-  fetch(`/api/events?limit=400`).then((r) => r.json()).then((evs) => {
-    if (consoleAgent !== id) return;
-    evs.filter((e) => e.from === id || e.agent?.id === id || e.id === id).forEach(acLine);
-    const pre = $('#ac-log'); pre.scrollTop = pre.scrollHeight;
-  }).catch(() => {});
+function routeToTerms(e) {
+  const id = e.from && terms.has(e.from) ? e.from
+    : e.agent && terms.has(e.agent.id) ? e.agent.id
+    : e.id && terms.has(e.id) ? e.id : null;
+  if (!id) return;
+  termLine(id, e);
+  if (e.agent?.status) terms.get(id).statusEl.textContent = e.agent.status;
 }
-
-$('#ac-close').addEventListener('click', () => { consoleAgent = null; $('#agent-console').hidden = true; });
-$('#ac-pop').addEventListener('click', async () => {
-  if (!consoleAgent) return;
-  try {
-    await fetch('/api/agent-terminal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: consoleAgent }) });
-    sysNote(`OS terminal opened for ${consoleAgent}`);
-  } catch { /* */ }
-});
 
 async function onChipSelect(id) {
   if (!id) return;
-  openConsole(id);
+  openTerm(id);
 }
 
 // ---------- bus connection ----------
@@ -136,13 +176,7 @@ function onEvent(e) {
   rateWin.push(performance.now());
   totalMsgs++;
   board.handleEvent(e);
-
-  // stream into the inline agent console
-  if (consoleAgent && (e.from === consoleAgent || e.agent?.id === consoleAgent || e.id === consoleAgent)) {
-    acLine(e);
-    if (e.agent?.task) $('#ac-task').textContent = String(e.agent.task).slice(0, 110);
-    const pre = $('#ac-log'); pre.scrollTop = pre.scrollHeight;
-  }
+  routeToTerms(e);
 
   switch (e.kind) {
     case 'join':
@@ -154,7 +188,7 @@ function onEvent(e) {
       agents.set(e.agent.id, e.agent); board.syncAgents([...agents.values()]);
       renderRoster(); renderTasks();
       feedAdd('spawn', 'HUB', `${e.agent.name} spawned — task: ${(e.prompt || '').slice(0, 80)}`);
-      openConsole(e.agent.id); // show its live output immediately
+      openTerm(e.agent.id); // terminal window appears wired to its chip immediately
       break;
     case 'leave':
       agents.delete(e.id); board.syncAgents([...agents.values()]);

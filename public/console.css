@@ -1,71 +1,82 @@
-/* console.css — inline live agent console overlaying the board */
+/* console.css — embedded terminal windows living on the PCB */
 
-#agent-console {
+#term-layer {
   position: absolute;
-  left: 14px;
-  bottom: 14px;
-  width: min(560px, calc(100% - 28px));
-  max-height: 46%;
+  inset: 0;
+  pointer-events: none; /* let clicks reach the board; windows re-enable */
+  z-index: 25;
+}
+
+.term-win {
+  position: absolute;
   display: flex;
   flex-direction: column;
-  background: rgba(6, 17, 11, .92);
-  border: 1px solid rgba(120, 220, 155, .35);
-  border-radius: 8px;
-  box-shadow: 0 6px 32px rgba(0, 0, 0, .55), 0 0 0 1px rgba(176, 141, 63, .15);
-  backdrop-filter: blur(4px);
-  z-index: 30;
+  background: #050d08;
+  border: 1px solid rgba(176, 141, 63, .6);
+  border-radius: 6px;
+  box-shadow:
+    0 12px 44px rgba(0, 0, 0, .7),
+    inset 0 0 22px rgba(88, 232, 138, .05);
   overflow: hidden;
+  pointer-events: auto;
 }
 
-.ac-head {
+.term-titlebar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  background: rgba(19, 41, 27, .9);
-  border-bottom: 1px solid rgba(120, 220, 155, .2);
+  gap: 7px;
+  padding: 5px 8px;
+  background: linear-gradient(#13291b, #0b1c12);
+  border-bottom: 1px solid rgba(120, 220, 155, .28);
+  user-select: none;
 }
 
-.ac-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: #58e88a;
-  box-shadow: 0 0 8px currentColor;
-  flex: none;
-}
+.tl-dots { display: inline-flex; gap: 4px; }
+.tl-dots span { width: 9px; height: 9px; border-radius: 50%; opacity: .9; }
 
-#ac-name { color: #d9efdf; font: 700 12px Consolas, monospace; letter-spacing: .04em; }
-#ac-task {
-  color: rgba(140, 180, 155, .85);
-  font: 10px Consolas, monospace;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.tl-name {
+  color: #d9efdf;
+  font: 700 11px Consolas, monospace;
+  letter-spacing: .05em;
+  margin-left: 4px;
   flex: 1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.ac-head button {
+.tl-status {
+  font: 700 9px Consolas, monospace;
+  color: #ffd166;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+.tl-status::before { content: '● '; color: #58e88a; }
+
+.tl-close {
   all: unset;
   cursor: pointer;
   color: #9fc4ab;
-  font: 700 13px Consolas, monospace;
-  padding: 0 7px;
-  line-height: 18px;
+  font: 700 14px Consolas, monospace;
+  line-height: 16px;
+  padding: 0 6px;
   border-radius: 4px;
 }
-.ac-head button:hover { color: #eafff2; background: rgba(88, 232, 138, .15); }
+.tl-close:hover { color: #ff5470; background: rgba(255, 84, 112, .15); }
 
-#ac-log {
+.term-body {
   margin: 0;
-  padding: 8px 10px;
-  overflow-y: auto;
+  padding: 7px 10px;
   flex: 1;
-  min-height: 90px;
+  overflow-y: auto;
   font: 11px/1.55 Consolas, 'Cascadia Mono', monospace;
   color: #b9dcc5;
   white-space: pre-wrap;
   word-break: break-word;
+  background:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, .016) 0 2px, transparent 2px 4px),
+    radial-gradient(ellipse at top, rgba(88, 232, 138, .04), transparent 60%);
 }
 
-.ac-row { padding: 1px 0; border-left: 2px solid transparent; }
-.ac-exit { color: #ff8f5e; font-weight: 700; }
+.term-body .t { color: rgba(120, 165, 138, .65); }
 
-#ac-log::-webkit-scrollbar { width: 8px; }
-#ac-log::-webkit-scrollbar-thumb { background: rgba(88, 232, 138, .25); border-radius: 4px; }
+.term-body::-webkit-scrollbar { width: 8px; }
+.term-body::-webkit-scrollbar-thumb { background: rgba(88, 232, 138, .25); border-radius: 4px; }

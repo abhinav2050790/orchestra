@@ -43,6 +43,7 @@ export class Board {
     this.selected = null;
     this.hovered = null;
     this.activity = 0;            // hub pulse 0..1
+    this.termRects = new Map();   // agentId -> terminal window rect (board coords)
 
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(wrapper);
@@ -92,6 +93,11 @@ export class Board {
   }
 
   touchAgent(id) { const n = this.agents.get(id); if (n) n.actT = performance.now(); }
+
+  syncTermRect(id, rect) {
+    if (rect) this.termRects.set(id, rect);
+    else this.termRects.delete(id);
+  }
 
   _pin(side, i, n, rect) {
     // returns {x,y} of pin i of n on given side of rect
@@ -264,6 +270,43 @@ export class Board {
     const g = this.f;
     g.clearRect(0, 0, this.W, this.H);
     this.activity *= Math.pow(0.994, dt);
+
+    // ---- terminal wires (chip -> embedded terminal window) ----
+    for (const [id, r] of this.termRects) {
+      const a = this.agents.get(id);
+      if (!a) continue;
+      const sx = a.cx, sy = a.cy + a.chipH / 2 + 5;
+      const tx = r.x + r.w / 2, ty = r.y - 5;
+      if (ty <= sy + 12) { // panel above the chip — route sideways
+        var rawPts = [{ x: sx, y: sy }, { x: sx, y: sy + 14 }, { x: r.x - 10, y: sy + 14 }, { x: r.x - 10, y: r.y + r.h / 2 }, { x: r.x - 5, y: r.y + r.h / 2 }];
+      } else {
+        var rawPts = [{ x: sx, y: sy }, { x: sx, y: (sy + ty) / 2 }, { x: tx, y: (sy + ty) / 2 }, { x: tx, y: ty }];
+      }
+      const wpts = chamfer(rawPts, 7);
+      this._strokePath(g, wpts, 4, 'rgba(96,74,32,.9)');
+      this._strokePath(g, wpts, 1.4, 'rgba(190,152,66,.55)');
+      // via at each bend
+      for (let i = 1; i < wpts.length - 1; i++) {
+        g.beginPath(); g.arc(wpts[i].x, wpts[i].y, 2.6, 0, Math.PI * 2);
+        g.fillStyle = '#0a140c'; g.fill();
+        g.strokeStyle = 'rgba(176,141,63,.7)'; g.lineWidth = 1; g.stroke();
+      }
+      // activity pulse traveling chip -> terminal
+      const act = Math.max(0, 1 - (t - a.actT) / 2600);
+      if (act > 0.02) {
+        const cum = [0];
+        for (let k = 1; k < wpts.length; k++) cum.push(cum[k - 1] + Math.hypot(wpts[k].x - wpts[k - 1].x, wpts[k].y - wpts[k - 1].y));
+        const len = cum[cum.length - 1];
+        const d = ((t / 4) % len);
+        const p = this._pointAt({ pts: wpts, cum }, d);
+        g.save();
+        g.shadowColor = a.color; g.shadowBlur = 9;
+        g.globalAlpha = act;
+        g.beginPath(); g.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        g.fillStyle = a.color; g.fill();
+        g.restore();
+      }
+    }
 
     // ---- chips ----
     for (const [id, a] of this.agents) {

@@ -34,16 +34,7 @@
       <canvas id="bg"></canvas>
       <canvas id="fx"></canvas>
       <div id="tooltip" hidden></div>
-      <div id="agent-console" hidden>
-        <div class="ac-head">
-          <span id="ac-dot" class="ac-dot"></span>
-          <b id="ac-name">AGENT</b>
-          <span id="ac-task"></span>
-          <button id="ac-pop" title="open in a real OS terminal">&#9141;</button>
-          <button id="ac-close" title="close">&times;</button>
-        </div>
-        <pre id="ac-log"></pre>
-      </div>
+      <div id="term-layer"></div>
       <div id="spawn-form" class="overlay-card" hidden>
         <h3>SPAWN OPENCODE WORKER</h3>
         <textarea id="spawn-prompt" rows="4" placeholder="Task prompt for the new opencode worker…"></textarea>
@@ -64,7 +55,7 @@
           <li><b>The center MCU</b> is the hub: every event routes through it.</li>
           <li><b>Glowing packets</b> on copper traces are realtime events (logs, messages, state writes).</li>
           <li><b>LED colors:</b> <span class="led amber">●</span> booting <span class="led cyan">●</span> working <span class="led green">●</span> idle/done <span class="led red">●</span> error/lost</li>
-          <li><b>Click a chip</b> to pop out its live terminal (history + realtime work log). Click again to highlight its traffic. Hover for details.</li>
+          <li><b>Click a chip</b> to open its embedded terminal — wired to the board, streaming live work. Spawned workers auto-open theirs.</li>
           <li>Keys: <b>S</b> spawn worker · <b>T</b> open terminal · <b>H</b> help · <b>ESC</b> close panels</li>
         </ul>
         <p class="hint">Any terminal can join: <code>ochre pipe -- yourcommand</code>. Any opencode session gets bus tools via the <code>orchestra</code> MCP server.</p>
