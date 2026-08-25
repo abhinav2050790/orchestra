@@ -94,7 +94,10 @@
   <div class="gate-card">
     <h3>ASSIGN WORKSPACE FOLDER</h3>
     <p>All synced workers write their files &amp; progress into this folder, plus a rolling <b>HANDOFF.md</b> session summary. This step is required — the app stays locked until a folder is assigned.</p>
-    <input id="gate-path" type="text" placeholder="e.g. D:\projects\my-orchestra" spellcheck="false" autocomplete="off" />
+    <div class="gate-row">
+      <input id="gate-path" type="text" placeholder="e.g. D:\projects\my-orchestra" spellcheck="false" autocomplete="off" />
+      <button id="gate-browse" title="Pick a folder with the system dialog">BROWSE…</button>
+    </div>
     <p id="gate-err" hidden></p>
     <button id="gate-go" class="primary">ASSIGN &amp; START ▸</button>
   </div>

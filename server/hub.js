@@ -550,6 +550,23 @@ const server = http.createServer(async (req, res) => {
         emit('msg', { to: '*', text: `workspace assigned → ${root} · project: ${name}` }, 'hub');
         return json(res, 200, { configured: true, root, project: name, projectDir: workspace.projectDir, projects: workspace.projects });
       }
+      if (req.method === 'GET' && p === '/api/workspace/browse') {
+        // opens the real OS folder picker on the machine running the hub
+        if (process.platform !== 'win32') return json(res, 501, { error: 'native folder picker only exists on the local hub — type the path manually' });
+        const ps = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command',
+          "Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Assign ORCHESTRA workspace folder'; if($d.ShowDialog() -eq 'OK'){$d.SelectedPath}"
+        ], { windowsHide: true });
+        let out = '';
+        const timer = setTimeout(() => { try { ps.kill(); } catch { /* */ } json(res, 200, { path: null }); }, 180000);
+        ps.stdout.on('data', (d) => { out += d; });
+        ps.on('error', () => { clearTimeout(timer); try { json(res, 200, { path: null }); } catch { /* */ } });
+        ps.on('close', () => {
+          clearTimeout(timer);
+          const sel = out.trim().split(/\r?\n/).filter(Boolean).pop();
+          try { json(res, 200, sel ? { path: sel } : { path: null }); } catch { /* answered by timeout */ }
+        });
+        return;
+      }
       if (req.method === 'POST' && p === '/api/workspace/project') {
         if (!workspace) return json(res, 400, { error: 'assign a workspace folder first' });
         const b = await readBody(req);

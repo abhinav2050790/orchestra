@@ -432,6 +432,17 @@ async function assignFolder() {
 }
 $('#gate-go').addEventListener('click', assignFolder);
 $('#gate-path').addEventListener('keydown', (e) => { if (e.key === 'Enter') assignFolder(); });
+$('#gate-browse').addEventListener('click', async () => {
+  const b = $('#gate-browse');
+  b.disabled = true;
+  try {
+    const j = await (await fetch('/api/workspace/browse')).json();
+    if (j.error) throw new Error(j.error);
+    if (j.path) { $('#gate-path').value = j.path; $('#gate-err').hidden = true; }
+  } catch (e) {
+    const err = $('#gate-err'); err.textContent = e.message; err.hidden = false;
+  } finally { b.disabled = false; }
+});
 
 $('#btn-project').addEventListener('click', async () => {
   if (!window.__wsInfo?.configured) { showGate(); return; }

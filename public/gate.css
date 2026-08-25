@@ -74,3 +74,14 @@ body.gated #shell {
 }
 #gate-go:hover { background: linear-gradient(#175230, #103823); box-shadow: 0 0 18px rgba(88, 232, 138, .25); }
 #gate-go:disabled { opacity: .5; cursor: wait; }
+
+.gate-row { display: flex; gap: 8px; }
+.gate-row #gate-path { flex: 1; }
+#gate-browse {
+  all: unset; cursor: pointer; padding: 11px 14px; border-radius: 6px;
+  background: #0c1d13; border: 1px solid rgba(176,141,63,.5);
+  color: #e6d9a8; font: 700 12px Consolas, monospace; letter-spacing: .04em; white-space: nowrap;
+}
+#gate-browse:hover { border-color: #b08d3f; color: #fff3c4; }
+#gate-browse:disabled { opacity: .45; cursor: wait; }
+
