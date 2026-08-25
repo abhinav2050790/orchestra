@@ -592,16 +592,21 @@ const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && p === '/api/workspace/browse') {
         // opens the real OS folder picker on the machine running the hub
         if (process.platform !== 'win32') return json(res, 501, { error: 'native folder picker only exists on the local hub — type the path manually' });
-        const ps = spawn('powershell.exe', ['-NoProfile', '-STA', '-Command',
-          "Add-Type -AssemblyName System.Windows.Forms; $o=New-Object System.Windows.Forms.Form; $o.TopMost=$true; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Assign ORCHESTRA workspace folder'; if($d.ShowDialog($o) -eq 'OK'){$d.SelectedPath}"
-        ], { windowsHide: true });
+        // native picker exe opens in ~200ms; powershell fallback takes seconds
+        const pickerExe = path.join(ROOT, 'scripts', 'bin', 'folder-picker.exe');
+        const useExe = fs.existsSync(pickerExe);
+        const ps = useExe
+          ? spawn(pickerExe, [], { windowsHide: true })
+          : spawn('powershell.exe', ['-NoProfile', '-STA', '-Command',
+              "Add-Type -AssemblyName System.Windows.Forms; $o=New-Object System.Windows.Forms.Form; $o.TopMost=$true; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Assign ORCHESTRA workspace folder'; if($d.ShowDialog($o) -eq 'OK'){$d.SelectedPath}"
+            ], { windowsHide: true });
         let out = '';
-        const timer = setTimeout(() => { try { ps.kill(); } catch { /* */ } json(res, 200, { path: null }); }, 60000);
+        const timer = setTimeout(() => { try { ps.kill(); } catch { /* */ } json(res, 200, { path: null }); }, useExe ? 300000 : 60000);
         ps.stdout.on('data', (d) => { out += d; });
         ps.on('error', () => { clearTimeout(timer); try { json(res, 200, { path: null }); } catch { /* */ } });
-        ps.on('close', () => {
+        ps.on('close', (code) => {
           clearTimeout(timer);
-          const sel = out.trim().split(/\r?\n/).filter(Boolean).pop();
+          const sel = out.trim();
           try { json(res, 200, sel ? { path: sel } : { path: null }); } catch { /* answered by timeout */ }
         });
         return;
