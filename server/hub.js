@@ -107,6 +107,11 @@ function spawnWorker({ prompt, model, name }) {
   agents.set(id, agent);
   emit('spawn', { agent: serializeAgent(agent), prompt }, 'hub');
 
+  // pop the worker's live terminal so its work is visible immediately
+  if (process.platform === 'win32') {
+    try { openAgentTerminal(id); } catch { /* board still shows the worker */ }
+  }
+
   const tmpl = cfg.workerCommand;
   let cmdline;
   const base = tmpl.map((s) =>
@@ -180,7 +185,9 @@ function killWorker(id) {
 function launchTerminalWindow({ title, batFile }) {
   const child = spawn('wt.exe', ['-w', '0', 'nt', '--title', title, '-d', ROOT, 'cmd', '/c', batFile], { detached: true, stdio: 'ignore' });
   child.on('error', () => { // wt.exe missing — fall back to plain cmd window
-    exec(`start "${title}" cmd /c "${batFile}"`);
+    try {
+      exec(`start "${title}" cmd /c "${batFile}"`, () => {});
+    } catch { /* headless host — ignore */ }
   });
   child.unref();
 }

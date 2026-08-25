@@ -24,22 +24,57 @@ const board = new Board(wrap, $('#bg'), $('#fx'), {
   },
 });
 
-// ---------- chip click -> live terminal ----------
-let lastTerm = { id: null, at: 0 };
+// ---------- chip click -> inline live console ----------
+let consoleAgent = null;
+
+function acLine(e) {
+  const pre = $('#ac-log');
+  const t = hhmmss(e.ts || Date.now());
+  let text = '';
+  switch (e.kind) {
+    case 'log': text = e.text; break;
+    case 'msg': text = `→ ${e.to === '*' ? 'ALL' : e.to}: ${e.text}`; break;
+    case 'status': text = `status = ${e.status}${e.detail ? ' · ' + e.detail : ''}`; break;
+    case 'task': text = `task → ${(e.agent?.task || '').slice(0, 100)}`; break;
+    case 'spawn': text = `spawned — task: ${(e.prompt || '').slice(0, 100)}`; break;
+    case 'exit': text = `EXIT (${e.status})`; break;
+    default: return;
+  }
+  const div = document.createElement('div');
+  div.className = 'ac-row' + (e.kind === 'exit' ? ' ac-exit' : '');
+  div.textContent = `[${t}] ${text}`;
+  pre.append(div);
+  while (pre.childElementCount > 500) pre.firstChild.remove();
+  pre.scrollTop = pre.scrollHeight;
+}
+
+function openConsole(id) {
+  consoleAgent = id;
+  const a = agents.get(id);
+  $('#ac-name').textContent = a?.name || id;
+  $('#ac-dot').style.background = a?.color || '#58e88a';
+  $('#ac-task').textContent = (a?.task || '').slice(0, 110);
+  $('#ac-log').innerHTML = '';
+  $('#agent-console').hidden = false;
+  fetch(`/api/events?limit=400`).then((r) => r.json()).then((evs) => {
+    if (consoleAgent !== id) return;
+    evs.filter((e) => e.from === id || e.agent?.id === id || e.id === id).forEach(acLine);
+    const pre = $('#ac-log'); pre.scrollTop = pre.scrollHeight;
+  }).catch(() => {});
+}
+
+$('#ac-close').addEventListener('click', () => { consoleAgent = null; $('#agent-console').hidden = true; });
+$('#ac-pop').addEventListener('click', async () => {
+  if (!consoleAgent) return;
+  try {
+    await fetch('/api/agent-terminal', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id: consoleAgent }) });
+    sysNote(`OS terminal opened for ${consoleAgent}`);
+  } catch { /* */ }
+});
+
 async function onChipSelect(id) {
   if (!id) return;
-  const t = performance.now();
-  if (id === lastTerm.id && t - lastTerm.at < 1500) return; // debounce double-fire
-  lastTerm = { id, at: t };
-  const a = agents.get(id);
-  try {
-    const r = await fetch('/api/agent-terminal', {
-      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }),
-    });
-    const j = await r.json();
-    if (j.error) throw new Error(j.error);
-    sysNote(`live terminal opened for ${a?.name || id} — watch its work there`);
-  } catch (err) { sysNote(`terminal failed: ${err.message}`); }
+  openConsole(id);
 }
 
 // ---------- bus connection ----------
@@ -102,6 +137,13 @@ function onEvent(e) {
   totalMsgs++;
   board.handleEvent(e);
 
+  // stream into the inline agent console
+  if (consoleAgent && (e.from === consoleAgent || e.agent?.id === consoleAgent || e.id === consoleAgent)) {
+    acLine(e);
+    if (e.agent?.task) $('#ac-task').textContent = String(e.agent.task).slice(0, 110);
+    const pre = $('#ac-log'); pre.scrollTop = pre.scrollHeight;
+  }
+
   switch (e.kind) {
     case 'join':
       agents.set(e.agent.id, e.agent); board.syncAgents([...agents.values()]);
@@ -112,6 +154,7 @@ function onEvent(e) {
       agents.set(e.agent.id, e.agent); board.syncAgents([...agents.values()]);
       renderRoster(); renderTasks();
       feedAdd('spawn', 'HUB', `${e.agent.name} spawned — task: ${(e.prompt || '').slice(0, 80)}`);
+      openConsole(e.agent.id); // show its live output immediately
       break;
     case 'leave':
       agents.delete(e.id); board.syncAgents([...agents.values()]);

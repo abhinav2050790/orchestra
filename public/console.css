@@ -1,0 +1,71 @@
+/* console.css — inline live agent console overlaying the board */
+
+#agent-console {
+  position: absolute;
+  left: 14px;
+  bottom: 14px;
+  width: min(560px, calc(100% - 28px));
+  max-height: 46%;
+  display: flex;
+  flex-direction: column;
+  background: rgba(6, 17, 11, .92);
+  border: 1px solid rgba(120, 220, 155, .35);
+  border-radius: 8px;
+  box-shadow: 0 6px 32px rgba(0, 0, 0, .55), 0 0 0 1px rgba(176, 141, 63, .15);
+  backdrop-filter: blur(4px);
+  z-index: 30;
+  overflow: hidden;
+}
+
+.ac-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: rgba(19, 41, 27, .9);
+  border-bottom: 1px solid rgba(120, 220, 155, .2);
+}
+
+.ac-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #58e88a;
+  box-shadow: 0 0 8px currentColor;
+  flex: none;
+}
+
+#ac-name { color: #d9efdf; font: 700 12px Consolas, monospace; letter-spacing: .04em; }
+#ac-task {
+  color: rgba(140, 180, 155, .85);
+  font: 10px Consolas, monospace;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  flex: 1;
+}
+
+.ac-head button {
+  all: unset;
+  cursor: pointer;
+  color: #9fc4ab;
+  font: 700 13px Consolas, monospace;
+  padding: 0 7px;
+  line-height: 18px;
+  border-radius: 4px;
+}
+.ac-head button:hover { color: #eafff2; background: rgba(88, 232, 138, .15); }
+
+#ac-log {
+  margin: 0;
+  padding: 8px 10px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 90px;
+  font: 11px/1.55 Consolas, 'Cascadia Mono', monospace;
+  color: #b9dcc5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ac-row { padding: 1px 0; border-left: 2px solid transparent; }
+.ac-exit { color: #ff8f5e; font-weight: 700; }
+
+#ac-log::-webkit-scrollbar { width: 8px; }
+#ac-log::-webkit-scrollbar-thumb { background: rgba(88, 232, 138, .25); border-radius: 4px; }
