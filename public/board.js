@@ -95,8 +95,11 @@ export class Board {
   touchAgent(id) { const n = this.agents.get(id); if (n) n.actT = performance.now(); }
 
   syncTermRect(id, rect) {
-    if (rect) this.termRects.set(id, rect);
-    else this.termRects.delete(id);
+    if (rect) this.termRects.set(id, { ...rect });
+    else {
+      const prev = this.termRects.get(id);
+      if (prev && prev.dieAt === undefined) prev.dieAt = performance.now(); // begin dissolve
+    }
   }
 
   _pin(side, i, n, rect) {

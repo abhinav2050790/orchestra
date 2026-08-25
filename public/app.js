@@ -113,11 +113,18 @@ function routeToTerms(e) {
   termLine(id, e);
   const t = terms.get(id);
   if (e.agent?.status) t.statusEl.textContent = e.agent.status;
-  // worker finished — let the terminal linger, then fade out with its wire
+  // worker finished — brief linger, then window and wire fade out together
   if (e.kind === 'exit' && !t.closeTimer) {
-    t.closeTimer = setTimeout(() => closeTerm(id), 10000);
+    t.closeTimer = setTimeout(() => closeTerm(id), 4000);
   }
 }
+
+// orphan audit: no wire may outlive its terminal window
+setInterval(() => {
+  for (const id of [...board.termRects.keys()]) {
+    if (!terms.has(id)) board.syncTermRect(id, null);
+  }
+}, 2000);
 
 async function onChipSelect(id) {
   if (!id) return;
@@ -201,6 +208,7 @@ function onEvent(e) {
       agents.delete(e.id); board.syncAgents([...agents.values()]);
       renderRoster();
       feedAdd('leave', 'HUB', `${e.name} left (${e.reason})`);
+      if (terms.has(e.id)) closeTerm(e.id);
       break;
     case 'exit': {
       const a = agents.get(e.agent?.id);
