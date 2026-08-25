@@ -69,7 +69,20 @@ if ($Terminals -gt 0) {
     -Body (@{ count = $Terminals } | ConvertTo-Json) | Out-Null
   Write-Host ("  [term] opening {0} wired opencode terminal(s)…" -f $Terminals) -ForegroundColor Green
 }
-if (-not $NoBrowser) { Start-Process "http://127.0.0.1:$port" }
+if (-not $NoBrowser) {
+  # open in Chrome explicitly (--new-window pops it in front); fall back to default browser
+  $chrome = @(
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "${env:ProgramFiles(x86)}\Google\Chrome\Application\chrome.exe",
+    "$env:LOCALAPPDATA\Google\Chrome\Application\chrome.exe"
+  ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $chrome) {
+    $reg = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe' -ErrorAction SilentlyContinue
+    if ($reg.'(default)' -and (Test-Path $reg.'(default)')) { $chrome = $reg.'(default)' }
+  }
+  if ($chrome) { Start-Process $chrome -ArgumentList "--new-window", "http://127.0.0.1:$port" }
+  else { Start-Process "http://127.0.0.1:$port" }
+}
 
 Write-Host ""
 Write-Host "  board : http://127.0.0.1:$port   (S=spawn worker  T=terminal  H=help)" -ForegroundColor DarkGray

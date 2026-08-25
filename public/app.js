@@ -34,14 +34,17 @@ function openTerm(id) {
   const a = agents.get(id) || {};
   const el = document.createElement('div');
   el.className = 'term-win';
-  // panel sized relative to the chip footprint (chip = 148x84)
-  const w = Math.round(148 * 2.6), h = Math.round(84 * 3.1);
+  const wr = wrap.getBoundingClientRect();
+  // compact panels — sized and arranged so 5+ fit on the full-width board
+  const cols = Math.max(2, Math.floor(wr.width / 400));
+  const w = Math.min(420, Math.max(320, Math.floor((wr.width - (cols + 1) * 12) / cols)));
+  const h = Math.min(280, Math.max(200, Math.floor((wr.height - 40) / 2)));
   el.style.width = w + 'px';
   el.style.height = h + 'px';
-  const wr = wrap.getBoundingClientRect();
   const n = termCount++;
-  el.style.left = Math.min(18 + (n % 3) * (w + 16), Math.max(18, wr.width - w - 14)) + 'px';
-  el.style.top = Math.max(12, wr.height - h - 14 - Math.floor(n / 3) * (h * 0.35)) + 'px';
+  const col = n % cols, row = Math.floor(n / cols);
+  el.style.left = (12 + col * (w + 12)) + 'px';
+  el.style.top = (10 + row * (h + 10)) + 'px';
   el.innerHTML = `
     <div class="term-titlebar">
       <span class="tl-dots"><span style="background:#ff5f57"></span><span style="background:#febc2e"></span><span style="background:#28c840"></span></span>
@@ -49,17 +52,152 @@ function openTerm(id) {
       <span class="tl-status">${esc(a.status || 'booting')}</span>
       <button class="tl-close" title="hide terminal">&times;</button>
     </div>
-    <div class="term-body"></div>`;
+    <div class="term-body"></div>
+    <div class="term-xterm" hidden></div>
+    <div class="term-input-row"><span class="term-ps1">❯</span><input class="term-in" spellcheck="false" autocomplete="off" placeholder="type a command…"></div>`;
   $('#term-layer').append(el);
-  t = { el, pre: el.querySelector('.term-body'), statusEl: el.querySelector('.tl-status') };
+  t = {
+    el,
+    pre: el.querySelector('.term-body'),
+    statusEl: el.querySelector('.tl-status'),
+    xt: el.querySelector('.term-xterm'),
+    inpRow: el.querySelector('.term-input-row'),
+    inp: el.querySelector('.term-in'),
+    mode: 'lines',
+  };
   terms.set(id, t);
   el.querySelector('.tl-close').addEventListener('click', () => closeTerm(id));
-  fetch('/api/events?limit=400').then((r) => r.json()).then((evs) => {
-    if (!terms.has(id)) return;
-    evs.filter((e) => e.from === id || e.agent?.id === id || e.id === id).forEach((e) => termLine(id, e));
-  }).catch(() => {});
+  // double-click titlebar → maximize / restore
+  const titlebar = el.querySelector('.term-titlebar');
+  titlebar.addEventListener('dblclick', () => {
+    if (t.restore) {
+      Object.assign(el.style, t.restore);
+      t.restore = null;
+    } else {
+      t.restore = { left: el.style.left, top: el.style.top, width: el.style.width, height: el.style.height };
+      Object.assign(el.style, { left: '10px', top: '10px', width: (wr.width - 20) + 'px', height: (wr.height - 20) + 'px' });
+    }
+    requestAnimationFrame(() => measureTerm(id));
+  });
+  // click anywhere on the terminal to type into it
+  el.addEventListener('mousedown', (e) => {
+    if (e.target.closest('.tl-close')) return;
+    setTimeout(() => { if (t.mode === 'xterm') t.term?.focus(); else t.inp?.focus(); }, 0);
+  });
+  t.inp.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const cmd = t.inp.value.trim();
+    if (!cmd) return;
+    t.inp.value = '';
+    const div = document.createElement('div');
+    div.innerHTML = `<span class="t">[${hhmmss(Date.now())}]</span> <span class="term-echo">❯ ${esc(cmd)}</span>`;
+    t.pre.append(div);
+    while (t.pre.childElementCount > 400) t.pre.firstChild.remove();
+    t.pre.scrollTop = t.pre.scrollHeight;
+    sendTermInput(id, cmd, true);
+  });
   requestAnimationFrame(() => measureTerm(id));
   return t;
+}
+
+// ---------- send keystrokes to a terminal's backing shell ----------
+function sendTermInput(id, data, isLine = false) {
+  fetch('/api/session-input', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ id, data, line: isLine })
+  })
+    .then((r) => r.json())
+    .then((j) => { if (j.error) termNote(id, j.error); })
+    .catch(() => termNote(id, 'bus unreachable'));
+}
+
+// ---------- upgrade a line-mode panel into a real xterm emulator ----------
+// Per-terminal lock: each terminal upgrades independently so multiple workers
+// never block each other (fixes the "page unresponsive" freeze).
+async function upgradeToXterm(id) {
+  const t = terms.get(id);
+  if (!t || t.mode === 'xterm') return;
+  if (t.upgradingPromise) return t.upgradingPromise;
+
+  t.upgradingPromise = (async () => {
+    try {
+      t.mode = 'xterm';
+      t.pre.hidden = true;
+      t.inpRow.hidden = true;
+      t.xt.hidden = false;
+
+      const term = new window.Terminal({
+        fontFamily: "Consolas, 'Cascadia Mono', monospace",
+        fontSize: 11,
+        lineHeight: 1.25,
+        cursorBlink: true,
+        scrollback: 1000,
+        theme: {
+          background: '#050d08',
+          foreground: '#b9dcc5',
+          cursor: '#58e88a',
+          cursorAccent: '#050d08',
+          selectionBackground: '#1c5c37',
+          black: '#0b1c12', red: '#ff5470', green: '#58e88a', yellow: '#ffd166',
+          blue: '#7ef0c9', magenta: '#ff9de2', cyan: '#4fd8ff', white: '#d9efdf',
+        },
+      });
+      const fit = new window.FitAddon.FitAddon();
+      term.loadAddon(fit);
+      term.open(t.xt);
+      try { fit.fit(); } catch { /* zero-size race */ }
+
+      // Set t.term immediately so incoming raw chunks write directly
+      t.term = term;
+      t.fit = fit;
+
+      // Flush any raw lines accumulated before xterm was ready
+      if (t.pendingRaw) {
+        const pending = t.pendingRaw;
+        t.pendingRaw = null;
+        for (const c of pending) term.write(c);
+      }
+
+      term.onData((data) => sendTermInput(id, data, false));
+      t.ro = new ResizeObserver(() => {
+        clearTimeout(t.fitT);
+        t.fitT = setTimeout(() => {
+          try {
+            fit.fit();
+            const dims = fit.proposeDimensions();
+            if (dims?.cols && dims?.rows) {
+              fetch('/api/session-input', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, cols: dims.cols, rows: dims.rows }) }).catch(() => {});
+            }
+          } catch { /* mid-layout */ }
+        }, 120);
+      });
+      t.ro.observe(t.el);
+
+      try {
+        const res = await fetch(`/api/term-backlog?id=${encodeURIComponent(id)}`);
+        if (res.ok) {
+          const j = await res.json();
+          if (j.backlog) term.write(j.backlog);
+          else if (j.error) term.writeln(`\x1b[33m${j.error}\x1b[0m`);
+        }
+      } catch { /* backlog optional */ }
+
+      term.focus();
+    } catch (err) {
+      console.error(`[xterm] Failed to upgrade terminal ${id}:`, err);
+      // Roll back to line mode so the panel is still usable
+      t.mode = 'lines';
+      t.pre.hidden = false;
+      t.inpRow.hidden = false;
+      t.xt.hidden = true;
+      t.pendingRaw = null;
+    } finally {
+      t.upgradingPromise = null;
+    }
+  })();
+
+  return t.upgradingPromise;
 }
 
 function closeTerm(id) {
@@ -67,6 +205,10 @@ function closeTerm(id) {
   if (!t) return;
   terms.delete(id);
   clearTimeout(t.closeTimer);
+  clearTimeout(t.fitT);
+  t.ro?.disconnect();
+  try { t.term?.dispose(); } catch { /* already gone */ }
+  fetch('/api/session-close', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
   t.el.classList.add('closing'); // CSS fade — wire fades on the board in sync
   setTimeout(() => t.el.remove(), 660);
   board.syncTermRect(id, null); // starts the 650ms wire dissolve
@@ -91,10 +233,10 @@ function termLine(id, e) {
       if (t.statusEl) t.statusEl.textContent = e.status;
       break;
     case 'task': text = `task: ${(e.agent?.task || '').slice(0, 100)}`; break;
-    case 'spawn': text = `$ ochre run "${String(e.prompt || '').slice(0, 100)}"`; break;
+    case 'spawn': text = `$ ${String(e.prompt || '').slice(0, 100)}`; break;
     case 'exit':
-      text = e.status === 'done' ? 'process finished — exit 0' : `process exited (${e.code ?? '?'})`;
-      if (t.statusEl) t.statusEl.textContent = e.status;
+      text = e.status === 'done' ? 'process finished — exit 0 · terminal stays, type below' : `process exited (${e.code ?? '?'}) · terminal stays, type below`;
+      if (t.statusEl) t.statusEl.textContent = e.status === 'done' ? 'idle' : 'exited';
       break;
     default: return;
   }
@@ -105,18 +247,36 @@ function termLine(id, e) {
   t.pre.scrollTop = t.pre.scrollHeight;
 }
 
+function termNote(id, text) {
+  const t = terms.get(id);
+  if (!t) return;
+  const div = document.createElement('div');
+  div.className = 'term-note';
+  div.textContent = text;
+  t.pre.append(div);
+  t.pre.scrollTop = t.pre.scrollHeight;
+}
+
 function routeToTerms(e) {
   const id = e.from && terms.has(e.from) ? e.from
     : e.agent && terms.has(e.agent.id) ? e.agent.id
     : e.id && terms.has(e.id) ? e.id : null;
   if (!id) return;
-  termLine(id, e);
   const t = terms.get(id);
-  if (e.agent?.status) t.statusEl.textContent = e.agent.status;
-  // worker finished — brief linger, then window and wire fade out together
-  if (e.kind === 'exit' && !t.closeTimer) {
-    t.closeTimer = setTimeout(() => closeTerm(id), 4000);
+  // raw ConPTY chunks → real terminal emulator (auto-upgrades the panel)
+  if (e.kind === 'log' && e.raw) {
+    if (!t.term || t.pendingRaw) {
+      if (!t.pendingRaw) { t.pendingRaw = []; upgradeToXterm(id); }
+      t.pendingRaw.push(e.text);
+      return;
+    }
+    t.term.write(e.text);
+    return;
   }
+  termLine(id, e);
+  if (e.agent?.status) t.statusEl.textContent = e.agent.status;
+  // terminals are persistent: a finished task never closes the window —
+  // typing in it spawns a live ConPTY console right in the same panel
 }
 
 // orphan audit: no wire may outlive its terminal window
@@ -173,7 +333,8 @@ function onWelcome(w) {
   board.syncAgents([]);
   board.syncAgents(w.agents);
   w.agents.forEach((a) => agents.set(a.id, a));
-  renderRoster(); renderTasks(); renderState(Object.entries(w.state));
+  renderRosterSoon(); renderTasksSoon(); renderState(Object.entries(w.state));
+  updateCommanderTargets();
   totalMsgs = w.stats.totalMsgs;
   $('#st-total').textContent = totalMsgs.toLocaleString();
   $('#bus-url').textContent = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/bus`;
@@ -196,43 +357,52 @@ function onEvent(e) {
   switch (e.kind) {
     case 'join':
       agents.set(e.agent.id, e.agent); board.syncAgents([...agents.values()]);
-      renderRoster();
+      renderRosterSoon();
+      updateCommanderTargets();
       feedAdd('join', 'HUB', `${e.agent.name} joined the bus`);
       break;
     case 'spawn':
       agents.set(e.agent.id, e.agent); board.syncAgents([...agents.values()]);
-      renderRoster(); renderTasks();
+      renderRosterSoon(); renderTasksSoon();
+      updateCommanderTargets();
       feedAdd('spawn', 'HUB', `${e.agent.name} spawned — task: ${(e.prompt || '').slice(0, 80)}`);
       openTerm(e.agent.id); // terminal window appears wired to its chip immediately
       break;
     case 'leave':
       agents.delete(e.id); board.syncAgents([...agents.values()]);
-      renderRoster();
+      renderRosterSoon();
+      updateCommanderTargets();
       feedAdd('leave', 'HUB', `${e.name} left (${e.reason})`);
-      if (terms.has(e.id)) closeTerm(e.id);
+      // the chip is gone but its terminal window stays on the board —
+      // it keeps the scrollback and typing in it opens a live shell
+      if (terms.has(e.id)) {
+        const t = terms.get(e.id);
+        t.statusEl.textContent = 'offline';
+        termNote(e.id, `${e.name} left the bus — terminal kept; type a command to work here`);
+      }
       break;
     case 'exit': {
       const a = agents.get(e.agent?.id);
       if (a) { a.status = e.status; }
-      renderTasks(); renderRoster();
+      renderTasksSoon(); renderRosterSoon();
       feedAdd(e.status === 'done' ? 'exit-done' : 'exit-error', e.agent?.name || '?', `finished (${e.status})`);
       break;
     }
     case 'status': {
       const a = agents.get(e.agent?.id);
       if (a) { a.status = e.status; a.detail = e.detail || ''; }
-      renderTasks(); renderRoster();
+      renderTasksSoon(); renderRosterSoon();
       feedAdd('status', e.from, `→ ${e.status}${e.detail ? ' · ' + e.detail : ''}`);
       break;
     }
     case 'task': {
       if (e.agent) agents.set(e.agent.id, { ...agents.get(e.agent.id), ...e.agent });
-      renderTasks(); renderRoster();
+      renderTasksSoon(); renderRosterSoon();
       feedAdd('task', e.from, `task → ${e.agent?.task?.slice(0, 70) || ''}`);
       break;
     }
     case 'log':
-      feedAdd('log', e.from, e.text);
+      if (!e.raw) feedAdd('log', e.from, e.text); // raw ConPTY frames go to terminals only, never the side feed
       break;
     case 'msg':
       feedAdd('msg', e.from, `→ ${e.to === '*' ? 'ALL' : e.to}: ${e.text}`);
@@ -252,120 +422,31 @@ function onEvent(e) {
   $('#st-total').textContent = totalMsgs.toLocaleString();
 }
 
-function sysNote(text) { feedAdd('join', 'SYS', text); }
+function sysNote() {}
 
-// ---------- feed ----------
-const feedEl = $('#feed');
-function feedAdd(kind, src, text, evObj) {
-  const li = document.createElement('li');
-  li.className = kind.startsWith('exit-') || kind.startsWith('state') ? kind : kind;
-  li.innerHTML = `<span class="t">${hhmmss(evObj?.ts || Date.now())}</span><span class="src">${esc(src)}</span> ${esc(text)}`;
-  const atTop = feedEl.scrollTop < 4;
-  feedEl.prepend(li);
-  while (feedEl.childElementCount > 400) feedEl.lastChild.remove();
-  if (atTop) feedEl.scrollTop = 0;
-}
-function scrollFeed() { feedEl.scrollTop = 0; }
-
-// ---------- state table ----------
-function upsertState(key, entry) {
-  const tb = $('#state-table tbody');
-  let row = tb.querySelector(`tr[data-k="${CSS.escape(key)}"]`);
-  if (!row) {
-    row = document.createElement('tr');
-    row.dataset.k = key;
-    row.innerHTML = `<td class="k"></td><td class="v"></td><td></td><td class="r"></td>`;
-    tb.prepend(row);
-  }
-  row.children[0].textContent = key;
-  row.children[1].textContent = JSON.stringify(entry.v);
-  row.children[2].textContent = entry.by;
-  row.children[3].textContent = entry.rev;
-}
-function removeState(key) {
-  $('#state-table tbody').querySelector(`tr[data-k="${CSS.escape(key)}"]`)?.remove();
-}
-function renderState(entries) {
-  const tb = $('#state-table tbody');
-  tb.innerHTML = '';
-  entries.forEach(([k, e]) => upsertState(k, e));
-}
-
-// ---------- roster & tasks ----------
-function pill(status) { return `<span class="pill ${esc(status)}">${esc(status.toUpperCase())}</span>`; }
-
-function renderRoster() {
-  const ul = $('#roster');
-  ul.innerHTML = [...agents.values()].map((a) =>
-    `<li class="roster-row">
-       <span class="roster-dot" style="background:${esc(a.color)};box-shadow:0 0 8px ${esc(a.color)}"></span>
-       <span class="roster-name">${esc(a.name)}</span>
-       <span class="roster-meta">${esc(a.role)}<br>${esc(a.status)}</span>
-     </li>`).join('');
-  $('#st-agents').textContent = agents.size;
-}
-
-function renderTasks() {
-  const withTasks = [...agents.values()].filter((a) => a.task);
-  const ul = $('#tasks');
-  ul.innerHTML = withTasks.length ? '' : '<li style="color:var(--ink-dim);padding:10px">no active tasks</li>';
-  for (const a of withTasks) {
-    const li = document.createElement('li');
-    li.className = 'task-card';
-    li.innerHTML = `<div class="tc-head"><span class="tc-name">${esc(a.name)}</span>${pill(a.status)}</div>
-                    <div class="tc-prompt">${esc(a.task.slice(0, 180))}</div>`;
-    ul.append(li);
-  }
-}
-
-// ---------- header ----------
-setInterval(() => {
-  const now = performance.now();
-  while (rateWin.length && rateWin[0] < now - 1000) rateWin.shift();
-  $('#st-rate').textContent = rateWin.length;
-}, 250);
-
-setInterval(() => {
-  // uptime from hub stats via /api/health is overkill; track locally since page load of welcome
-}, 1 << 30);
-
-let uptimeBase = null;
-setInterval(() => {
-  if (!uptimeBase) return;
-  const s = Math.floor((Date.now() - uptimeBase) / 1000);
-  const h = String(Math.floor(s / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
-  const ss = String(s % 60).padStart(2, '0');
-  $('#st-uptime').textContent = `${h}:${mm}:${ss}`;
-}, 1000);
-
-fetch('/api/health').then((r) => r.json()).then(() => {}).catch(() => {});
-
-fetch('/api/config').then((r) => r.json()).then((c) => {
-  if (!c.workerModel) return;
-  const mi = $('#spawn-model');
-  mi.value = c.workerModel; // builds are pinned server-side — show it, don't allow changing it
-  mi.disabled = true;
-  mi.title = 'builds are pinned to this model';
-}).catch(() => {});
-
-// ---------- tabs ----------
-for (const btn of document.querySelectorAll('#tabs button')) {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === btn));
-    document.querySelectorAll('.tab').forEach((t) => t.classList.remove('active'));
-    $('#tab-' + btn.dataset.tab).classList.add('active');
-  });
-}
+// ---------- feed / state / roster / tasks — sidebar removed, stubs only ----------
+function feedAdd() {}
+function scrollFeed() {}
+function upsertState() {}
+function removeState() {}
+function renderState() {}
+function renderRoster() {}
+function renderTasks() {}
+function renderRosterSoon() {}
+function renderTasksSoon() {}
 
 // ---------- spawn form ----------
 const spawnForm = $('#spawn-form');
-$('#btn-spawn').addEventListener('click', () => { helpPanel.hidden = true; spawnForm.hidden = !spawnForm.hidden; $('#spawn-prompt').focus(); });
+$('#btn-spawn').addEventListener('click', () => {
+  if (!window.__wsInfo?.configured) { showGate(); return; }
+  helpPanel.hidden = true; spawnForm.hidden = !spawnForm.hidden; $('#spawn-prompt').focus();
+});
 $('#spawn-cancel').addEventListener('click', () => { spawnForm.hidden = true; });
 $('#spawn-go').addEventListener('click', doSpawn);
 $('#spawn-prompt').addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) doSpawn(); });
 
 async function doSpawn() {
+  if (!window.__wsInfo?.configured) { showGate(); return; }
   const prompt = $('#spawn-prompt').value.trim();
   if (!prompt) return;
   const count = Number($('#spawn-count').value) || 1;
@@ -385,12 +466,292 @@ async function doSpawn() {
 
 // ---------- terminals ----------
 $('#btn-terminals').addEventListener('click', async () => {
+  if (!window.__wsInfo?.configured) { showGate(); return; }
   const n = prompt('How many wired opencode terminals to open?', '2');
   if (!n) return;
+    try {
+      const r = await fetch('/api/terminals', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ count: Number(n) }) });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error);
+      sysNote(`opened ${n} in-app terminal(s) — click one and type a command`);
+    } catch (err) { alert(err.message); }
+});
+
+// ---------- missions (intelligent project decomposer & swarm launcher) ----------
+const missionForm = $('#mission-form');
+let currentPlanTasks = [];
+
+function renderRosterCards(tasks) {
+  const container = $('#mission-prompts');
+  container.innerHTML = '';
+  currentPlanTasks = tasks;
+
+  tasks.forEach((t, i) => {
+    const card = document.createElement('div');
+    card.className = 'mission-card';
+    card.innerHTML = `
+      <div class="mission-card-head">
+        <span class="mission-card-title">⌬ ${esc(t.name || `AGENT-${i + 1}`)}</span>
+        <span class="mission-card-role">${esc(t.role || 'Specialist')}</span>
+        <button type="button" class="mission-card-del" title="Remove agent">&times;</button>
+      </div>
+      <div class="mission-card-scope"><b>Scope:</b> ${esc(t.scope || '')}</div>
+      ${t.files ? `<div class="mission-card-scope"><b>Target Files:</b> <code>${esc(t.files)}</code></div>` : ''}
+      <textarea class="mission-prompt" rows="3" placeholder="Task instructions for this agent…">${esc(t.prompt || '')}</textarea>
+    `;
+
+    card.querySelector('.mission-card-del').addEventListener('click', () => {
+      card.remove();
+    });
+
+    container.append(card);
+  });
+
+  $('#mission-roster-section').hidden = false;
+}
+
+function addCustomAgentRow() {
+  const idx = $('#mission-prompts').children.length + 1;
+  const t = {
+    name: `CUSTOM-AGENT-${idx}`,
+    role: 'Specialist',
+    scope: 'Custom assigned scope',
+    files: '',
+    prompt: '',
+  };
+  const container = $('#mission-prompts');
+  const card = document.createElement('div');
+  card.className = 'mission-card';
+  card.innerHTML = `
+    <div class="mission-card-head">
+      <span class="mission-card-title">⌬ ${esc(t.name)}</span>
+      <span class="mission-card-role">Custom Role</span>
+      <button type="button" class="mission-card-del" title="Remove agent">&times;</button>
+    </div>
+    <textarea class="mission-prompt" rows="3" placeholder="Task prompt for this agent…"></textarea>
+  `;
+  card.querySelector('.mission-card-del').addEventListener('click', () => card.remove());
+  container.append(card);
+  $('#mission-roster-section').hidden = false;
+  card.querySelector('textarea').focus();
+}
+
+$('#btn-mission').addEventListener('click', () => {
+  if (!window.__wsInfo?.configured) { showGate(); return; }
+  spawnForm.hidden = true; helpPanel.hidden = true;
+  missionForm.hidden = !missionForm.hidden;
+  if (!missionForm.hidden) $('#mission-master-prompt').focus();
+});
+
+$('#mission-add').addEventListener('click', () => addCustomAgentRow());
+$('#mission-cancel').addEventListener('click', () => { missionForm.hidden = true; });
+
+async function getProjectPlan() {
+  const prompt = $('#mission-master-prompt').value.trim();
+  if (!prompt) {
+    alert('Please enter your project plan / specification prompt first.');
+    $('#mission-master-prompt').focus();
+    return null;
+  }
+  const teamSize = $('#mission-team-size').value;
+  const style = $('#mission-style').value;
+
+  const btn = $('#mission-preview-btn');
+  btn.disabled = true;
+  btn.textContent = 'ANALYZING & DECOMPOSING…';
+
   try {
-    await fetch('/api/terminals', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ count: Number(n) }) });
-    sysNote(`opening ${n} wired terminal(s) in Windows Terminal…`);
-  } catch (err) { alert(err.message); }
+    const r = await fetch('/api/mission/plan', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt, teamSize, style })
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+    renderRosterCards(j.tasks || []);
+    return j;
+  } catch (err) {
+    alert('Plan generation failed: ' + err.message);
+    return null;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 PREVIEW & EDIT PLAN';
+  }
+}
+
+$('#mission-preview-btn').addEventListener('click', getProjectPlan);
+
+async function launchMissionSwarm(isQuick) {
+  const prompt = $('#mission-master-prompt').value.trim();
+  if (!prompt) {
+    alert('Please enter your project plan / specification prompt.');
+    $('#mission-master-prompt').focus();
+    return;
+  }
+  const teamSize = $('#mission-team-size').value;
+  const style = $('#mission-style').value;
+
+  const goBtn = $('#mission-quick-launch');
+  goBtn.disabled = true;
+  goBtn.textContent = 'LAUNCHING SWARM…';
+
+  try {
+    let payload = { prompt, teamSize, style };
+
+    // If preview cards are open and edited, collect them
+    const cards = document.querySelectorAll('#mission-prompts .mission-card');
+    if (!isQuick && cards.length > 0) {
+      const customTasks = [];
+      cards.forEach((c) => {
+        const name = c.querySelector('.mission-card-title').textContent.replace('⌬', '').trim();
+        const role = c.querySelector('.mission-card-role').textContent.trim();
+        const p = c.querySelector('.mission-prompt').value.trim();
+        if (p) customTasks.push({ name, role, prompt: p });
+      });
+      if (customTasks.length) payload.tasks = customTasks;
+    }
+
+    const r = await fetch('/api/mission', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+
+    missionForm.hidden = true;
+    $('#mission-master-prompt').value = '';
+    $('#mission-roster-section').hidden = true;
+    $('#mission-prompts').innerHTML = '';
+  } catch (err) {
+    alert('Mission launch failed: ' + err.message);
+  } finally {
+    goBtn.disabled = false;
+    goBtn.textContent = '⚡ AUTO-DECOMPOSE & LAUNCH ▸';
+  }
+}
+
+// ---------- autonomous swarm commander chatbox controller (tap to open) ----------
+function updateCommanderTargets() {
+  const select = $('#commander-target');
+  const badge = $('#commander-agent-badge');
+  const count = agents.size;
+  if (badge) badge.textContent = `${count} AGENT${count === 1 ? '' : 'S'}`;
+
+  if (!select) return;
+  const currentVal = select.value;
+  select.innerHTML = `
+    <option value="auto">⚡ AUTO-ROUTE (Smart AI)</option>
+    <option value="all">📢 @ALL (Broadcast to All)</option>
+  `;
+  for (const a of agents.values()) {
+    const opt = document.createElement('option');
+    opt.value = a.id;
+    opt.textContent = `⌬ ${a.name} (${a.role || 'Agent'})`;
+    select.append(opt);
+  }
+  if ([...select.options].some((o) => o.value === currentVal)) {
+    select.value = currentVal;
+  }
+}
+
+function openCommander() {
+  const trigger = $('#commander-pill-trigger');
+  const panel = $('#commander-panel');
+  if (trigger) trigger.hidden = true;
+  if (panel) {
+    panel.hidden = false;
+    setTimeout(() => $('#commander-input')?.focus(), 40);
+  }
+}
+
+function closeCommander() {
+  const trigger = $('#commander-pill-trigger');
+  const panel = $('#commander-panel');
+  const drawer = $('#commander-log-drawer');
+  if (panel) panel.hidden = true;
+  if (drawer) drawer.hidden = true;
+  if (trigger) trigger.hidden = false;
+}
+
+$('#commander-pill-trigger')?.addEventListener('click', openCommander);
+$('#commander-collapse-btn')?.addEventListener('click', closeCommander);
+
+function appendCommanderLog(entry) {
+  const list = $('#commander-log-list');
+  if (!list) return;
+  const li = document.createElement('li');
+  const targetPill = (entry.targets || []).map((t) => `<span class="log-target">→ ${esc(t.name)}</span>`).join(' ');
+  li.innerHTML = `
+    <span class="log-time">[${hhmmss(Date.now())}]</span>
+    ${targetPill}
+    <span class="log-text">${esc(entry.message)}</span>
+  `;
+  list.prepend(li);
+  while (list.children.length > 60) list.lastChild.remove();
+}
+
+async function sendCommanderInstruction() {
+  const input = $('#commander-input');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  const target = $('#commander-target').value;
+  const sendBtn = $('#commander-send-btn');
+  sendBtn.disabled = true;
+
+  try {
+    const r = await fetch('/api/chat-command', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ message: msg, target })
+    });
+    const j = await r.json();
+    if (j.error) throw new Error(j.error);
+
+    input.value = '';
+    appendCommanderLog({ targets: j.routedTo || [], message: msg });
+
+    // Highlight and focus target terminals on the board
+    if (Array.isArray(j.routedTo)) {
+      for (const t of j.routedTo) {
+        const termObj = openTerm(t.id);
+        if (termObj?.el) {
+          termObj.el.style.borderColor = '#58e88a';
+          termObj.el.style.boxShadow = '0 0 24px rgba(88, 232, 138, 0.6)';
+          setTimeout(() => {
+            if (termObj?.el) {
+              termObj.el.style.borderColor = '';
+              termObj.el.style.boxShadow = '';
+            }
+          }, 2200);
+        }
+      }
+    }
+  } catch (err) {
+    alert('Dispatch failed: ' + err.message);
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+$('#commander-send-btn')?.addEventListener('click', sendCommanderInstruction);
+$('#commander-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendCommanderInstruction();
+  if (e.key === 'Escape') closeCommander();
+});
+$('#commander-log-toggle')?.addEventListener('click', () => {
+  const d = $('#commander-log-drawer');
+  if (d) d.hidden = !d.hidden;
+});
+$('#btn-close-commander-log')?.addEventListener('click', () => {
+  const d = $('#commander-log-drawer');
+  if (d) d.hidden = true;
+});
+$('#btn-clear-commander-log')?.addEventListener('click', () => {
+  const l = $('#commander-log-list');
+  if (l) l.innerHTML = '';
 });
 
 // ---------- help ----------
@@ -399,13 +760,25 @@ $('#btn-help').addEventListener('click', () => { spawnForm.hidden = true; helpPa
 
 document.addEventListener('keydown', (e) => {
   if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
-    if (e.key === 'Escape') { spawnForm.hidden = true; helpPanel.hidden = true; }
+    if (e.key === 'Escape') {
+      spawnForm.hidden = true;
+      helpPanel.hidden = true;
+      closeCommander();
+    }
     return;
   }
-  if (e.key === 'Escape') { spawnForm.hidden = true; helpPanel.hidden = true; }
+  if (e.key === 'Escape') {
+    spawnForm.hidden = true;
+    helpPanel.hidden = true;
+    closeCommander();
+  }
   if (e.key === 's' || e.key === 'S') $('#btn-spawn').click();
   if (e.key === 't' || e.key === 'T') $('#btn-terminals').click();
   if (e.key === 'h' || e.key === 'H') $('#btn-help').click();
+  if (e.key === 'c' || e.key === 'C' || e.key === '/') {
+    e.preventDefault();
+    openCommander();
+  }
 });
 
 // ---------- workspace gate (mandatory folder assignment) ----------
@@ -554,27 +927,94 @@ $('#dir-fallback').addEventListener('change', async (e) => {
 });
 
 let browsing = false;
-$('#gate-browse').addEventListener('click', async () => {
-  if (browsing) return;
-  browsing = true;
+$('#gate-browse')?.addEventListener('click', async () => {
   const b = $('#gate-browse');
   b.disabled = true;
-  // unlock fast — the pickers/dialogs are modal on their own and must never leave the button stuck
-  setTimeout(() => { b.disabled = false; browsing = false; }, 1200);
+  setTimeout(() => { b.disabled = false; }, 1500);
+
+  // 1. Trigger local OS Explorer Dialog
   try {
-    if (!isLocalHub) {
-      await cloudPick(); // cloud hub → pick in YOUR browser, your disk
-      return;
-    }
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 75000);
+    const timer = setTimeout(() => ctrl.abort(), 90000);
     const j = await (await fetch('/api/workspace/browse', { signal: ctrl.signal })).json();
     clearTimeout(timer);
-    if (j.error) throw new Error(j.error);
-    if (j.path) { $('#gate-path').value = j.path; $('#gate-err').hidden = true; }
-  } catch (e) {
-    if (e.name === 'AbortError') { const err = $('#gate-err'); err.textContent = 'folder dialog timed out — type the path manually'; err.hidden = false; return; }
-    const err = $('#gate-err'); err.textContent = e.message; err.hidden = false;
+    if (j?.path) {
+      $('#gate-path').value = j.path;
+      $('#gate-err').hidden = true;
+      sysNote(`selected workspace folder: ${j.path}`);
+      return;
+    }
+  } catch { /* try web fallback */ }
+
+  // 2. Browser File System Access API (Chrome/Edge)
+  if (window.showDirectoryPicker) {
+    try {
+      const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+      if (handle) {
+        await idb.set('wsHandle', handle);
+        $('#gate-path').value = handle.name;
+        $('#gate-err').hidden = true;
+        if (!isLocalHub) {
+          await registerBrowserWorkspace(handle.name);
+          sysNote(`folder "${handle.name}" linked`);
+          syncCloudFiles();
+        }
+        return;
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+
+  // 3. Directory input fallback
+  $('#dir-fallback').click();
+});
+
+let browsingFile = false;
+$('#gate-browse-file')?.addEventListener('click', async () => {
+  const b = $('#gate-browse-file');
+  b.disabled = true;
+  setTimeout(() => { b.disabled = false; }, 1500);
+
+  // 1. Trigger local OS File Dialog
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 90000);
+    const j = await (await fetch('/api/workspace/browse-file', { signal: ctrl.signal })).json();
+    clearTimeout(timer);
+    if (j?.path) {
+      $('#gate-path').value = j.path;
+      $('#gate-err').hidden = true;
+      sysNote(`file attached → workspace folder set to ${j.path}`);
+      return;
+    }
+  } catch { /* try web fallback */ }
+
+  // 2. Browser File System Access API
+  if (window.showOpenFilePicker) {
+    try {
+      const [handle] = await window.showOpenFilePicker();
+      if (handle) {
+        $('#gate-path').value = handle.name;
+        $('#gate-err').hidden = true;
+        return;
+      }
+    } catch (e) {
+      if (e.name === 'AbortError') return;
+    }
+  }
+
+  // 3. File input fallback
+  $('#file-fallback').click();
+});
+
+$('#file-fallback')?.addEventListener('change', (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = '';
+  if (file) {
+    $('#gate-path').value = file.name;
+    $('#gate-err').hidden = true;
+    sysNote(`selected file "${file.name}"`);
   }
 });
 
@@ -607,4 +1047,3 @@ connect();
 
 // debug/test introspection
 window.__orchestra = { board, terms, agents };
-

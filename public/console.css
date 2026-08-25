@@ -78,8 +78,55 @@
 
 .term-body .t { color: rgba(120, 165, 138, .65); }
 
+/* ConPTY terminal emulator host (true console replica mode) */
+.term-xterm {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 6px;
+  overflow: hidden;
+}
+.term-xterm .xterm { height: 100%; }
+.term-xterm .xterm-viewport,
+.term-xterm .xterm-screen { background-color: transparent !important; }
+
 .term-body::-webkit-scrollbar { width: 8px; }
 .term-body::-webkit-scrollbar-thumb { background: rgba(88, 232, 138, .25); border-radius: 4px; }
+
+/* interactive input row — click the terminal, type a command */
+.term-input-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-top: 1px solid rgba(120, 220, 155, .22);
+  background: #071309;
+}
+
+.term-ps1 {
+  color: #58e88a;
+  font: 700 12px Consolas, monospace;
+  user-select: none;
+}
+
+.term-in {
+  all: unset;
+  flex: 1;
+  font: 12px Consolas, 'Cascadia Mono', monospace;
+  color: #eafff0;
+  caret-shape: bar;
+}
+.term-in::placeholder { color: rgba(150, 200, 165, .35); }
+
+.term-win:focus-within {
+  border-color: rgba(88, 232, 138, .85);
+  box-shadow:
+    0 12px 44px rgba(0, 0, 0, .7),
+    0 0 18px rgba(88, 232, 138, .25),
+    inset 0 0 22px rgba(88, 232, 138, .05);
+}
+
+.term-echo { color: #ffd166; }
+.term-note { color: rgba(255, 209, 102, .85); font-style: italic; }
 
 .term-win.closing {
   opacity: 0;

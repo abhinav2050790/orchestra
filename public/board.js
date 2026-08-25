@@ -58,12 +58,14 @@ export class Board {
     });
 
     let last = performance.now(), acc = 0, frames = 0, fpsT = 0;
+    const FRAME_MIN = 1000 / 30; // cap the PCB at 30fps — it fights xterm panels for paint time otherwise
     const loop = (t) => {
+      requestAnimationFrame(loop);
+      if (t - last < FRAME_MIN) return;
       const dt = Math.min(t - last, 50); last = t;
       acc += dt; frames++;
       if (t - fpsT > 1000) { this.onStats?.({ fps: Math.round(frames * 1000 / (t - fpsT)), pkts: this.packets.length }); fpsT = t; frames = 0; }
       this.tick(dt, t);
-      requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
   }

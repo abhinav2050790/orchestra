@@ -75,15 +75,17 @@ body.gated #shell {
 #gate-go:hover { background: linear-gradient(#175230, #103823); box-shadow: 0 0 18px rgba(88, 232, 138, .25); }
 #gate-go:disabled { opacity: .5; cursor: wait; }
 
-.gate-row { display: flex; gap: 8px; }
-.gate-row #gate-path { flex: 1; }
-#gate-browse {
-  all: unset; cursor: pointer; padding: 11px 14px; border-radius: 6px;
+.gate-row { display: flex; flex-direction: column; gap: 10px; }
+.gate-row #gate-path { width: 100%; box-sizing: border-box; }
+.gate-btn-group { display: flex; gap: 8px; }
+#gate-browse, #gate-browse-file {
+  all: unset; cursor: pointer; flex: 1; text-align: center; padding: 10px 12px; border-radius: 6px;
   background: #0c1d13; border: 1px solid rgba(176,141,63,.5);
-  color: #e6d9a8; font: 700 12px Consolas, monospace; letter-spacing: .04em; white-space: nowrap;
+  color: #e6d9a8; font: 700 11px Consolas, monospace; letter-spacing: .04em; white-space: nowrap;
+  box-sizing: border-box;
 }
-#gate-browse:hover { border-color: #b08d3f; color: #fff3c4; }
-#gate-browse:disabled { opacity: .45; cursor: wait; }
+#gate-browse:hover, #gate-browse-file:hover { border-color: #b08d3f; color: #fff3c4; background: #132a1c; }
+#gate-browse:disabled, #gate-browse-file:disabled { opacity: .45; cursor: wait; }
 
 /* floating save button — browsers without File System Access (Brave/Firefox/Safari) */
 #btn-save-files {
@@ -96,4 +98,3 @@ body.gated #shell {
 }
 #btn-save-files:hover { border-color: #b08d3f; color: #fff3c4; box-shadow: 0 6px 28px rgba(176, 141, 63, .25); }
 #btn-save-files[hidden] { display: none; }
-

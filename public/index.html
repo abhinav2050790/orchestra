@@ -6,6 +6,7 @@
 <title>ORCHESTRA — Sync Bus</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2306110b'/%3E%3Crect x='7' y='9' width='18' height='14' rx='2' fill='none' stroke='%23b08d3f' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%2358e88a'/%3E%3Cpath d='M4 12h3M4 20h3M25 12h3M25 20h3' stroke='%23c9a227' stroke-width='2'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="/style.css" />
+<link rel="stylesheet" href="/vendor/xterm.css" />
 <link rel="stylesheet" href="/console.css" />
 <link rel="stylesheet" href="/gate.css" />
 </head>
@@ -26,7 +27,8 @@
     <div class="actions">
       <button id="btn-folder" title="Change the assigned workspace folder">⌂ FOLDER</button>
       <button id="btn-project" title="Start a new project folder">+ PROJECT</button>
-      <button id="btn-terminals" title="Open new wired opencode terminals (t)">+ TERMINAL</button>
+      <button id="btn-terminals" title="Open in-app opencode agent terminals (t)">+ TERMINAL</button>
+      <button id="btn-mission" class="primary" title="Launch a coordinated multi-agent mission">◆ MISSION</button>
       <button id="btn-spawn" class="primary" title="Spawn opencode worker (s)">+ WORKER</button>
       <button id="btn-help" title="Help (h)">?</button>
     </div>
@@ -38,6 +40,55 @@
       <canvas id="fx"></canvas>
       <div id="tooltip" hidden></div>
       <div id="term-layer"></div>
+      <div id="mission-form" class="overlay-card mission-modal" hidden>
+        <div class="modal-header">
+          <h3>◆ AUTONOMOUS PROJECT MISSION — INTELLIGENT DECOMPOSER</h3>
+          <span class="badge-tag">MULTI-AGENT SWARM</span>
+        </div>
+        <p class="mission-desc">Explain your entire project plan, features, tech stack, and goals in one prompt. Orchestra's decomposer automatically analyzes requirements, splits the workload into non-overlapping specialized roles, generates a shared <code>BLACKBOARD.md</code> contract, and launches all opencode workers across your board simultaneously.</p>
+        
+        <label class="m-field">
+          <span>MASTER PROJECT PLAN & ARCHITECTURE SPECIFICATION</span>
+          <textarea id="mission-master-prompt" rows="5" placeholder="e.g. Build a full-stack SaaS bookstore: Express backend with REST APIs, PostgreSQL database schema with Prisma models, JWT auth & bcrypt login, Stripe subscription checkout webhook, responsive Tailwind UI dashboard with book catalog & shopping cart, and comprehensive Jest test suites."></textarea>
+        </label>
+
+        <div class="row mission-options">
+          <label>
+            <span>TEAM SIZE</span>
+            <select id="mission-team-size">
+              <option value="auto">⚡ Auto-Detect (Optimal)</option>
+              <option value="3">3 Agents (Lean Team)</option>
+              <option value="4" selected>4 Agents (Balanced)</option>
+              <option value="5">5 Agents (Full Stack + QA)</option>
+              <option value="6">6 Agents (Power Team)</option>
+            </select>
+          </label>
+          <label>
+            <span>ARCHITECTURE FOCUS</span>
+            <select id="mission-style">
+              <option value="auto">⚡ Auto-Detect Style</option>
+              <option value="fullstack">Full-Stack Web App</option>
+              <option value="backend">Backend API & Database</option>
+              <option value="frontend">Frontend UI & Components</option>
+              <option value="cli">CLI / System Tooling</option>
+            </select>
+          </label>
+        </div>
+
+        <div id="mission-roster-section" class="roster-preview-box" hidden>
+          <div class="roster-header">
+            <h4>DECOMPOSED TEAM ROSTER</h4>
+            <button id="mission-add" class="small-btn" type="button">+ ADD CUSTOM AGENT</button>
+          </div>
+          <div id="mission-prompts" class="mission-grid"></div>
+        </div>
+
+        <div class="row end mission-actions">
+          <button id="mission-cancel">CANCEL</button>
+          <button id="mission-preview-btn">🔍 PREVIEW & EDIT PLAN</button>
+          <button id="mission-quick-launch" class="primary">⚡ AUTO-DECOMPOSE & LAUNCH ▸</button>
+        </div>
+      </div>
       <div id="spawn-form" class="overlay-card" hidden>
         <h3>SPAWN OPENCODE WORKER</h3>
         <textarea id="spawn-prompt" rows="4" placeholder="Task prompt for the new opencode worker…"></textarea>
@@ -49,7 +100,7 @@
           <button id="spawn-cancel">CANCEL</button>
           <button id="spawn-go" class="primary">LAUNCH ▸</button>
         </div>
-        <p class="hint">Worker = headless <code>opencode run "&lt;prompt&gt;"</code>, streamed live onto the bus.</p>
+        <p class="hint">Worker = a live <code>opencode</code> chat on the board; your prompt is typed into it automatically.</p>
       </div>
       <div id="help-panel" class="overlay-card" hidden>
         <h3>HOW THE BOARD WORKS</h3>
@@ -59,24 +110,56 @@
           <li><b>Glowing packets</b> on copper traces are realtime events (logs, messages, state writes).</li>
           <li><b>LED colors:</b> <span class="led amber">●</span> booting <span class="led cyan">●</span> working <span class="led green">●</span> idle/done <span class="led red">●</span> error/lost</li>
           <li><b>Click a chip</b> to open its embedded terminal — wired to the board, streaming live work. Spawned workers auto-open theirs.</li>
+          <li><b>Terminals are interactive &amp; persistent</b> — click one, type a command, press Enter. They stay open after a task finishes.</li>
           <li>Keys: <b>S</b> spawn worker · <b>T</b> open terminal · <b>H</b> help · <b>ESC</b> close panels</li>
         </ul>
         <p class="hint">Any terminal can join: <code>ochre pipe -- yourcommand</code>. Any opencode session gets bus tools via the <code>orchestra</code> MCP server.</p>
-      </div>
     </section>
 
-    <aside id="side">
-      <nav id="tabs">
-        <button data-tab="feed" class="active">FEED</button>
-        <button data-tab="state">STATE</button>
-        <button data-tab="tasks">TASKS</button>
-        <button data-tab="agents">ROSTER</button>
-      </nav>
-      <div id="tab-feed" class="tab active"><ul id="feed"></ul></div>
-      <div id="tab-state" class="tab"><table id="state-table"><thead><tr><th>KEY</th><th>VALUE</th><th>BY</th><th>REV</th></tr></thead><tbody></tbody></table></div>
-      <div id="tab-tasks" class="tab"><ul id="tasks"></ul></div>
-      <div id="tab-agents" class="tab"><ul id="roster"></ul></div>
-    </aside>
+    <!-- Autonomous Swarm Chatbox & Global Instruction Commander (Tap to Open) -->
+    <div id="commander-container">
+      <button id="commander-pill-trigger" type="button" title="Tap to Open Swarm Chatbox (Key: C or /)">
+        <span class="pill-icon">⚡</span>
+        <span class="pill-title">SWARM CHATBOX &amp; COMMANDER</span>
+        <span id="commander-agent-badge" class="pill-badge">0 AGENTS</span>
+        <span class="pill-hint">▾ TAP TO OPEN</span>
+      </button>
+
+      <div id="commander-panel" class="commander-panel" hidden>
+        <div class="commander-panel-head">
+          <div class="panel-head-left">
+            <span class="cmd-icon">⚡</span>
+            <span class="panel-head-title">SWARM COMMAND CHATBOX</span>
+          </div>
+          <div class="panel-head-actions">
+            <button id="commander-log-toggle" type="button" class="head-btn" title="Toggle Swarm Activity Log">📜 LOG</button>
+            <button id="commander-collapse-btn" type="button" class="head-btn close-btn" title="Collapse (ESC)">&times;</button>
+          </div>
+        </div>
+
+        <div id="commander-log-drawer" class="commander-drawer" hidden>
+          <div class="commander-drawer-head">
+            <span>⌬ INSTRUCTION ROUTING &amp; EXECUTION LOG</span>
+            <div class="drawer-actions">
+              <button id="btn-clear-commander-log" class="drawer-btn" type="button">CLEAR</button>
+              <button id="btn-close-commander-log" class="drawer-btn" type="button">&times;</button>
+            </div>
+          </div>
+          <ul id="commander-log-list"></ul>
+        </div>
+
+        <div class="commander-inner">
+          <div class="commander-prefix">
+            <select id="commander-target" title="Select Target Terminal or Smart Router">
+              <option value="auto">⚡ AUTO-ROUTE (Smart AI)</option>
+              <option value="all">📢 @ALL (Broadcast to All)</option>
+            </select>
+          </div>
+          <input id="commander-input" type="text" placeholder="Type instruction for any terminal (e.g. 'Fix database schema', 'Add dark mode in UI', 'Run tests')..." autocomplete="off" spellcheck="false" />
+          <button id="commander-send-btn" class="primary" title="Send instruction (Enter)">DISPATCH ❯</button>
+        </div>
+      </div>
+    </div>
   </main>
 
   <footer id="statusbar">
@@ -90,19 +173,25 @@
     <span id="bus-url"></span>
   </footer>
 </div>
+<script src="/vendor/xterm.js"></script>
+<script src="/vendor/addon-fit.js"></script>
 <script type="module" src="/app.js"></script>
 <input id="dir-fallback" type="file" webkitdirectory multiple hidden />
+<input id="file-fallback" type="file" hidden />
 <button id="btn-save-files" hidden title="Download HANDOFF.md & progress into your folder">⬇ SAVE FILES</button>
 <div id="gate" hidden>
   <div class="gate-card">
-    <h3>ASSIGN WORKSPACE FOLDER</h3>
-    <p>All synced workers write their files &amp; progress into this folder, plus a rolling <b>HANDOFF.md</b> session summary. This step is required — the app stays locked until a folder is assigned. <b>Empty or brand-new folder?</b> Browsers can't read those from the picker — just type its name instead.</p>
+    <h3>ASSIGN WORKSPACE FOLDER (REQUIRED)</h3>
+    <p>Attaching a project folder is required before starting a mission, spawning workers, or executing tasks. All workers write files and track deliverables in this folder.</p>
     <div class="gate-row">
-      <input id="gate-path" type="text" placeholder="e.g. D:\projects\my-orchestra" spellcheck="false" autocomplete="off" />
-      <button id="gate-browse" title="Pick a folder with the system dialog">BROWSE…</button>
+      <input id="gate-path" type="text" placeholder="e.g. D:\projects\my-pcb-studio" spellcheck="false" autocomplete="off" />
+      <div class="gate-btn-group">
+        <button id="gate-browse" type="button" title="Browse for a workspace folder">📁 BROWSE FOLDER…</button>
+        <button id="gate-browse-file" type="button" title="Select any project file to attach its folder">📄 BROWSE FILE…</button>
+      </div>
     </div>
     <p id="gate-err" hidden></p>
-    <button id="gate-go" class="primary">ASSIGN &amp; START ▸</button>
+    <button id="gate-go" class="primary">ASSIGN &amp; START WORKING ▸</button>
   </div>
 </div>
 </body>

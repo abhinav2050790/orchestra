@@ -85,7 +85,24 @@ async function main() {
   if (cmd === 'board') {
     const url = HTTP;
     const { exec } = await import('node:child_process');
-    exec(`start "" "${url}"`, { shell: true });
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    // prefer Chrome in a fresh window (pops to front); fall back to default browser
+    const chromePaths = process.platform === 'win32' ? [
+      join(process.env['ProgramFiles'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env['ProgramFiles(x86)'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      join(process.env['LOCALAPPDATA'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ] : [];
+    const chrome = chromePaths.find((p2) => p2 && existsSync(p2));
+    if (chrome) {
+      spawnProc(chrome, ['--new-window', url], { detached: true, stdio: 'ignore' }).unref();
+    } else if (process.platform === 'darwin') {
+      exec(`open -na "Google Chrome" "${url}"`);
+    } else if (process.platform === 'linux') {
+      exec(`google-chrome --new-window "${url}" || xdg-open "${url}"`, { shell: true });
+    } else {
+      exec(`start "" "${url}"`, { shell: true });
+    }
     console.log(`${C.g}board →${C.x} ${url}`);
     return;
   }

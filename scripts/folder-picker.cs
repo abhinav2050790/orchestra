@@ -3,10 +3,14 @@
 // Prints the selected path to stdout; exit 1 on cancel/error.
 using System;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 static class P
 {
+    [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+
     [STAThread]
     static int Main()
     {
@@ -23,6 +27,15 @@ static class P
             };
             o.Show();
             Application.DoEvents();
+            // a background-spawned process loses the foreground battle to the active
+            // browser, leaving the modal dialog painted behind it — steal focus back
+            for (var i = 0; i < 10 && GetForegroundWindow() != o.Handle; i++)
+            {
+                SetForegroundWindow(o.Handle);
+                o.Activate();
+                Application.DoEvents();
+                System.Threading.Thread.Sleep(50);
+            }
             using (var d = new FolderBrowserDialog { Description = "Assign ORCHESTRA workspace folder" })
             {
                 if (d.ShowDialog(o) == DialogResult.OK) { Console.Out.Write(d.SelectedPath); return 0; }
