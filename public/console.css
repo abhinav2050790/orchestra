@@ -80,3 +80,11 @@
 
 .term-body::-webkit-scrollbar { width: 8px; }
 .term-body::-webkit-scrollbar-thumb { background: rgba(88, 232, 138, .25); border-radius: 4px; }
+
+.term-win.closing {
+  opacity: 0;
+  transform: translateY(8px) scale(.97);
+  transition: opacity .6s ease, transform .6s ease;
+  pointer-events: none;
+}
+

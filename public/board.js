@@ -273,8 +273,16 @@ export class Board {
 
     // ---- terminal wires (chip -> embedded terminal window) ----
     for (const [id, r] of this.termRects) {
+      // fade out in sync with the closing terminal window
+      let alpha = 1;
+      if (r.dieAt !== undefined) {
+        alpha = Math.max(0, 1 - (t - r.dieAt) / 650);
+        if (alpha <= 0) { this.termRects.delete(id); continue; }
+      }
       const a = this.agents.get(id);
-      if (!a) continue;
+      if (!a) { if (!alpha || alpha >= 1) this.termRects.delete(id); continue; }
+      g.save();
+      g.globalAlpha = alpha;
       const sx = a.cx, sy = a.cy + a.chipH / 2 + 5;
       const tx = r.x + r.w / 2, ty = r.y - 5;
       if (ty <= sy + 12) { // panel above the chip — route sideways
@@ -301,11 +309,12 @@ export class Board {
         const p = this._pointAt({ pts: wpts, cum }, d);
         g.save();
         g.shadowColor = a.color; g.shadowBlur = 9;
-        g.globalAlpha = act;
+        g.globalAlpha = act * alpha;
         g.beginPath(); g.arc(p.x, p.y, 3, 0, Math.PI * 2);
         g.fillStyle = a.color; g.fill();
         g.restore();
       }
+      g.restore();
     }
 
     // ---- chips ----

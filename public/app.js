@@ -65,9 +65,11 @@ function openTerm(id) {
 function closeTerm(id) {
   const t = terms.get(id);
   if (!t) return;
-  t.el.remove();
   terms.delete(id);
-  board.syncTermRect(id, null);
+  clearTimeout(t.closeTimer);
+  t.el.classList.add('closing'); // CSS fade — wire fades on the board in sync
+  setTimeout(() => t.el.remove(), 660);
+  board.syncTermRect(id, null); // starts the 650ms wire dissolve
 }
 
 function measureTerm(id) {
@@ -109,7 +111,12 @@ function routeToTerms(e) {
     : e.id && terms.has(e.id) ? e.id : null;
   if (!id) return;
   termLine(id, e);
-  if (e.agent?.status) terms.get(id).statusEl.textContent = e.agent.status;
+  const t = terms.get(id);
+  if (e.agent?.status) t.statusEl.textContent = e.agent.status;
+  // worker finished — let the terminal linger, then fade out with its wire
+  if (e.kind === 'exit' && !t.closeTimer) {
+    t.closeTimer = setTimeout(() => closeTerm(id), 10000);
+  }
 }
 
 async function onChipSelect(id) {
