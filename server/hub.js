@@ -1,5 +1,6 @@
 import http from 'node:http';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { spawn, exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -97,6 +98,19 @@ function uniqueId(base) {
 // ---------- worker spawner ----------
 function quote(s) { return '"' + String(s).replace(/"/g, '\\"') + '"'; }
 
+// zen (opencode) credential — workers need it when builds run through opencode zen/go.
+// Prefer the env var; fall back to the local `opencode auth login` store.
+let zenKeyCache;
+function zenApiKey() {
+  if (process.env.OPENCODE_API_KEY) return process.env.OPENCODE_API_KEY;
+  if (zenKeyCache !== undefined) return zenKeyCache;
+  try {
+    const j = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json'), 'utf8'));
+    zenKeyCache = j.opencode?.key || null;
+  } catch { zenKeyCache = null; }
+  return zenKeyCache;
+}
+
 function spawnWorker({ prompt, model, name }) {
   model = cfg.workerModel || model; // builds run ONLY on the pinned model — callers cannot override
   const id = uniqueId('w-' + rid());
@@ -127,6 +141,7 @@ function spawnWorker({ prompt, model, name }) {
     shell: true,
     env: {
       ...process.env,
+      ...(zenApiKey() ? { OPENCODE_API_KEY: zenApiKey() } : {}),
       OCHRE_AGENT_ID: id,
       OCHRE_AGENT_NAME: display,
       OCHRE_URL: `ws://${cfg.host}:${cfg.port}${BUS_PATH}`,

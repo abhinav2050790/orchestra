@@ -6,5 +6,5 @@
   "maxWorkers": 16,
   "staleMs": 12000,
   "workerCommand": ["opencode", "run", "{prompt}"],
-  "workerModel": "openrouter/stealth/ox-alpha"
+  "workerModel": "opencode-go/ox-alpha-free"
 }
