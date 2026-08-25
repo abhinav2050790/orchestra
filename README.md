@@ -77,7 +77,8 @@ scripts/             demo traffic generator, MCP installer
 
 ## Cloud deploy (Railway)
 
-- Live: https://orchestra-production-44b1.up.railway.app
+- Live: https://orchestra-production-44b1.up.railway.app (auto-deploys from main)
 - Auto-deploy: connected to GitHub repo `abhinav2050790/orchestra` — every push to `main` builds & deploys automatically.
 - The hub binds `0.0.0.0:$PORT` on cloud hosts; locally it stays on 127.0.0.1:8787.
+
 
