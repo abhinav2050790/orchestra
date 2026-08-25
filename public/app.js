@@ -432,6 +432,7 @@ async function assignFolder() {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     applyWorkspace(j);
+    updateSaveBtn();
     sysNote(isLocalHub
       ? 'workspace locked in — all worker files & HANDOFF.md land there'
       : `folder "${j.root.replace('browser://', '')}" linked — use ⬇ SAVE FILES to pull HANDOFF.md & progress into it`);
