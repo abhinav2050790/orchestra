@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// install-mcp.mjs — registers the ochestra MCP server into the user's global
+// install-mcp.mjs — registers the orchestra MCP server into the user's global
 // opencode config (~/.config/opencode/opencode.jsonc), preserving existing
 // settings. JSONC-aware: strips comments/trailing commas for parsing and
 // keeps a timestamped backup before rewriting.
@@ -61,12 +61,12 @@ if (!cfgFile) {
 
 cfg.$schema = cfg.$schema || 'https://opencode.ai/config.json';
 cfg.mcp = cfg.mcp || {};
-cfg.mcp.ochestra = mcpBlock();
+cfg.mcp.orchestra = mcpBlock();
 
 fs.writeFileSync(cfgFile, JSON.stringify(cfg, null, 2) + '\n', 'utf8');
-console.log(`ochestra MCP registered → ${cfgFile}`);
+console.log(`orchestra MCP registered → ${cfgFile}`);
 console.log(`server entry: node "${SERVER_JS}"`);
-console.log('\nverify with:  opencode mcp list   (should show ochestra ✓)');
+console.log('\nverify with:  opencode mcp list   (should show orchestra ✓)');
 console.log('then any opencode session can call tools like ochre_board, ochre_send, ochre_spawn.');
 
 function mcpBlock() {

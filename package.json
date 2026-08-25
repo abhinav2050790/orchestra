@@ -1,5 +1,5 @@
 {
-  "name": "ochrestra",
+  "name": "orchestra",
   "version": "1.0.0",
   "description": "Realtime synced orchestration environment for multiple opencode terminals — a shared event bus with a PCB-style live dashboard.",
   "main": "server/hub.js",

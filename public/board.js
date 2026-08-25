@@ -227,7 +227,7 @@ export class Board {
     g.save();
     g.globalAlpha = 0.08; g.fillStyle = '#c9e5d2'; g.font = '700 64px Consolas, monospace';
     g.textAlign = 'right';
-    g.fillText('OCHRESTRA', W - 24, H - 58);
+    g.fillText('ORCHESTRA', W - 24, H - 58);
     g.font = '600 14px Consolas, monospace';
     g.fillText('SYNC BUS · REV 1.0 · LOCALHOST FAB', W - 24, H - 38);
     g.textAlign = 'left';
@@ -335,7 +335,7 @@ export class Board {
     }
     g.textAlign = 'center';
     g.fillStyle = '#eafff2'; g.font = '700 15px Consolas, monospace';
-    g.fillText('OCHRESTRA', hub.x + hub.w / 2, hub.y + hub.h / 2 - 8);
+    g.fillText('ORCHESTRA', hub.x + hub.w / 2, hub.y + hub.h / 2 - 8);
     g.fillStyle = 'rgba(109,143,123,.95)'; g.font = '9px Consolas, monospace';
     g.fillText('HUB · SYNC BUS MCU', hub.x + hub.w / 2, hub.y + hub.h / 2 + 8);
     // core LED breathing with activity

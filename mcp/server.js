@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Ochrestra MCP server — stdio JSON-RPC bridge that gives every opencode
+// Orchestra MCP server — stdio JSON-RPC bridge that gives every opencode
 // session native tools for talking on the sync bus.
 import WebSocket from 'ws';
 import readline from 'node:readline';
@@ -75,12 +75,12 @@ const bus = new BusClient();
 const TOOLS = [
   {
     name: 'ochre_board',
-    description: 'See all agents currently connected to the shared Ochrestra bus, their status/current tasks, plus shared blackboard keys and recent activity. Call this first to coordinate with other agents.',
+    description: 'See all agents currently connected to the shared Orchestra bus, their status/current tasks, plus shared blackboard keys and recent activity. Call this first to coordinate with other agents.',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'ochre_send',
-    description: 'Send a message on the Ochrestra bus. Broadcasts to ALL agents by default, or direct-message one agent by id/name. Use this to coordinate, hand off work, share findings.',
+    description: 'Send a message on the Orchestra bus. Broadcasts to ALL agents by default, or direct-message one agent by id/name. Use this to coordinate, hand off work, share findings.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -207,7 +207,7 @@ rl.on('line', async (line) => {
       result: {
         protocolVersion: params?.protocolVersion || '2024-11-05',
         capabilities: { tools: {} },
-        serverInfo: { name: 'ochestra', version: '1.0.0' },
+        serverInfo: { name: 'orchestra', version: '1.0.0' },
       },
     });
   }
@@ -229,4 +229,4 @@ rl.on('line', async (line) => {
   }
 });
 
-process.stderr.write(`[ochestra-mcp] bridging ${SELF_NAME} → ${BUS}\n`);
+process.stderr.write(`[orchestra-mcp] bridging ${SELF_NAME} → ${BUS}\n`);

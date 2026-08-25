@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ochre — command-line access to the Ochrestra sync bus.
+// ochre — command-line access to the Orchestra sync bus.
 import WebSocket from 'ws';
 import { spawn as spawnProc } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -10,7 +10,7 @@ const ANSI_RE = /[\u001b\u009b][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.
 const stripAnsi = (s) => s.replace(ANSI_RE, '');
 
 const HELP = `
-ochre — Ochrestra bus client
+ochre — Orchestra bus client
 
   ochre board                 open the PCB dashboard in your browser
   ochre ps                    list agents on the bus
@@ -40,7 +40,7 @@ class Client {
   connect() {
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(BUS);
-      const to = setTimeout(() => reject(new Error(`hub unreachable at ${BUS} — run Start-Ochrestra.ps1 first`)), 4000);
+      const to = setTimeout(() => reject(new Error(`hub unreachable at ${BUS} — run Start-Orchestra.ps1 first`)), 4000);
       this.ws.on('open', () => {
         this.ws.send(JSON.stringify({ t: 'hello', id: this.id, name: this.name, role: this.role, pid: process.pid, cwd: process.cwd() }));
         this.hbTimer = setInterval(() => this.raw({ t: 'hb' }), 3000);

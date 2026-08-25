@@ -1,4 +1,4 @@
-# ⌬ OCHRESTRA
+# ⌬ ORCHESTRA
 
 A native, synced orchestration environment for your machine: run **multiple opencode terminals working on different tasks at the same time**, all sharing **live realtime data** over one event bus — visualized as a living circuit board.
 
@@ -20,15 +20,15 @@ A native, synced orchestration environment for your machine: run **multiple open
 ## Quickstart
 
 ```powershell
-cd D:\ochrestra
-.\Start-Ochrestra.ps1              # hub + dashboard in browser
-.\Start-Ochrestra.ps1 -Demo        # + 5 synthetic agents (no LLM cost)
-.\Start-Ochrestra.ps1 -Workers 3   # + spawn 3 real opencode workers with a task
-.\Start-Ochrestra.ps1 -Terminals 2 # + open 2 wired opencode terminal tabs
-.\Start-Ochrestra.ps1 -InstallMcp  # register bus tools into every opencode session
+cd D:\orchestra
+.\Start-Orchestra.ps1              # hub + dashboard in browser
+.\Start-Orchestra.ps1 -Demo        # + 5 synthetic agents (no LLM cost)
+.\Start-Orchestra.ps1 -Workers 3   # + spawn 3 real opencode workers with a task
+.\Start-Orchestra.ps1 -Terminals 2 # + open 2 wired opencode terminal tabs
+.\Start-Orchestra.ps1 -InstallMcp  # register bus tools into every opencode session
 ```
 
-Stop everything: `.\Stop-Ochrestra.ps1`
+Stop everything: `.\Stop-Orchestra.ps1`
 
 ## The four integration surfaces
 
@@ -55,7 +55,7 @@ Stop everything: `.\Stop-Ochrestra.ps1`
 
 ## Config
 
-`ochestra.config.json` — port, host, history limit, max workers, and the worker command template:
+`orchestra.config.json` — port, host, history limit, max workers, and the worker command template:
 
 ```json
 { "workerCommand": ["opencode", "run", "{prompt}"] }

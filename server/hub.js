@@ -21,7 +21,7 @@ const DEFAULTS = {
 };
 let cfg = { ...DEFAULTS };
 try {
-  const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'ochestra.config.json'), 'utf8'));
+  const j = JSON.parse(fs.readFileSync(path.join(ROOT, 'orchestra.config.json'), 'utf8'));
   cfg = { ...DEFAULTS, ...j };
 } catch { /* defaults */ }
 
@@ -198,7 +198,7 @@ function openTerminal(count = 1) {
       `set OCHRE_URL=ws://${cfg.host}:${cfg.port}${BUS_PATH}`,
       `cd /d ${ROOT}`,
       `echo [OCHRE] terminal wired to bus as ${tid}`,
-      'echo [OCHRE] your opencode session can sync via the ochestra MCP tools.',
+      'echo [OCHRE] your opencode session can sync via the orchestra MCP tools.',
       'opencode',
     ].join('\r\n');
     fs.writeFileSync(file, body, 'utf8');
@@ -502,13 +502,13 @@ const listenPort = Number(process.env.PORT) || cfg.port;
 const listenHost = process.env.HOST || (process.env.PORT ? '0.0.0.0' : cfg.host);
 
 server.listen(listenPort, listenHost, () => {
-  console.log(`[ochrestra] hub online  ws://${listenHost}:${listenPort}${BUS_PATH}`);
-  console.log(`[ochrestra] board     http://${listenHost}:${listenPort}`);
-  console.log(`[ochrestra] state dir  ./${cfg.persistDir}/  (${store.events.length} events replayed, ${store.state.size} keys)`);
+  console.log(`[orchestra] hub online  ws://${listenHost}:${listenPort}${BUS_PATH}`);
+  console.log(`[orchestra] board     http://${listenHost}:${listenPort}`);
+  console.log(`[orchestra] state dir  ./${cfg.persistDir}/  (${store.events.length} events replayed, ${store.state.size} keys)`);
 });
 
 async function shutdown() {
-  console.log('\n[ochrestra] shutting down…');
+  console.log('\n[orchestra] shutting down…');
   for (const id of [...children.keys()]) killWorker(id);
   await store.save().catch(() => {});
   await store.flushLog().catch(() => {});

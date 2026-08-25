@@ -11,7 +11,7 @@ $port = 8787
 New-Item -ItemType Directory -Force "$root\.data" | Out-Null
 
 Write-Host ""
-Write-Host "  OCHRESTRA :: boot" -ForegroundColor DarkCyan
+Write-Host "  ORCHESTRA :: boot" -ForegroundColor DarkCyan
 Write-Host "  ==================" -ForegroundColor DarkCyan
 
 # ---- deps ----
@@ -52,7 +52,7 @@ Write-Host ("  [ui  ] http://127.0.0.1:{0}" -f $port)
 
 # ---- optional actions ----
 if ($InstallMcp) {
-  Write-Host "  [mcp ] registering ochestra into opencode config…"
+  Write-Host "  [mcp ] registering orchestra into opencode config…"
   Push-Location $root; node scripts/install-mcp.mjs; Pop-Location
 }
 if ($Demo) {
@@ -74,5 +74,5 @@ if (-not $NoBrowser) { Start-Process "http://127.0.0.1:$port" }
 Write-Host ""
 Write-Host "  board : http://127.0.0.1:$port   (S=spawn worker  T=terminal  H=help)" -ForegroundColor DarkGray
 Write-Host "  cli   : node cli/ochre.js ps | tail | send | spawn | pipe -- cmd" -ForegroundColor DarkGray
-Write-Host "  stop  : .\Stop-Ochrestra.ps1" -ForegroundColor DarkGray
+Write-Host "  stop  : .\Stop-Orchestra.ps1" -ForegroundColor DarkGray
 Write-Host ""
