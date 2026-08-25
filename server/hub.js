@@ -561,6 +561,12 @@ const server = http.createServer(async (req, res) => {
         emit('msg', { to: '*', text: `workspace assigned → ${root} · project: ${name}` }, 'hub');
         return json(res, 200, { configured: true, root, project: name, projectDir: workspace.projectDir, projects: workspace.projects });
       }
+      if (req.method === 'DELETE' && p === '/api/workspace') {
+        workspace = null;
+        saveWorkspace(); wsDirty = true;
+        emit('msg', { to: '*', text: 'workspace cleared — assign a folder to continue' }, 'hub');
+        return json(res, 200, { configured: false });
+      }
       if (req.method === 'GET' && p === '/api/handoff') {
         if (!workspace) return json(res, 400, { error: 'workspace not assigned' });
         res.writeHead(200, { 'Content-Type': 'text/markdown; charset=utf-8', 'Cache-Control': 'no-store' });

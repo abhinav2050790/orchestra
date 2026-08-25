@@ -541,6 +541,8 @@ $('#gate-browse').addEventListener('click', async () => {
   } finally { b.disabled = false; }
 });
 
+$('#btn-folder').addEventListener('click', () => showGate());
+
 $('#btn-project').addEventListener('click', async () => {
   if (!window.__wsInfo?.configured) { showGate(); return; }
   const name = prompt('New project name (a subfolder is created in your workspace):', 'project-' + new Date().toISOString().slice(0, 10));
