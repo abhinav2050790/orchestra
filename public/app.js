@@ -417,8 +417,14 @@ function showGate() {
 async function assignFolder() {
   const err = $('#gate-err');
   err.hidden = true;
-  const p = $('#gate-path').value.trim();
+  let p = $('#gate-path').value.trim();
   if (!p) { err.textContent = 'enter a folder path to continue'; err.hidden = false; return; }
+  // cloud board: the folder lives on YOUR machine, not the server — accept any name/path,
+  // including brand-new or empty folders that file pickers cannot represent
+  if (!isLocalHub && !p.startsWith('browser://')) {
+    const base = p.split(/[\\/]/).filter(Boolean).pop() || p;
+    p = 'browser://' + sanitizeFolderName(base);
+  }
   const go = $('#gate-go');
   go.disabled = true; go.textContent = 'ASSIGNING…';
   try {
@@ -426,7 +432,9 @@ async function assignFolder() {
     const j = await r.json();
     if (j.error) throw new Error(j.error);
     applyWorkspace(j);
-    sysNote('workspace locked in — all worker files & HANDOFF.md land there');
+    sysNote(isLocalHub
+      ? 'workspace locked in — all worker files & HANDOFF.md land there'
+      : `folder "${j.root.replace('browser://', '')}" linked — use ⬇ SAVE FILES to pull HANDOFF.md & progress into it`);
   } catch (e) {
     err.textContent = e.message; err.hidden = false;
   } finally { go.disabled = false; go.textContent = 'ASSIGN & START ▸'; }
@@ -514,14 +522,25 @@ async function cloudPick() {
   $('#dir-fallback').click();
 }
 
+function sanitizeFolderName(s) {
+  const clean = String(s).replace(/[\\/:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+  return clean || 'workspace';
+}
+
 $('#dir-fallback').addEventListener('change', async (e) => {
-  const rel = e.target.files?.[0]?.webkitRelativePath || '';
+  const files = e.target.files;
   e.target.value = '';
-  const name = rel.split('/')[0];
-  if (!name) return;
+  const rel = files?.[0]?.webkitRelativePath || '';
+  let name = rel.split('/')[0];
+  if (!name) {
+    // empty/new folder: browsers return zero files (sometimes no change event at all),
+    // so there is no path to read — ask for the folder name instead
+    name = prompt('That folder is empty, so the browser could not read its name.\nType the folder name to link it:', 'my-project');
+    if (!name) return;
+  }
   try {
-    await registerBrowserWorkspace(name);
-    sysNote(`folder "${name}" linked (download mode) — use ⬇ SAVE FILES to pull HANDOFF.md & progress into it`);
+    await registerBrowserWorkspace(sanitizeFolderName(name));
+    sysNote(`folder "${sanitizeFolderName(name)}" linked (download mode) — use ⬇ SAVE FILES to pull HANDOFF.md & progress into it`);
   } catch (err) { alert(err.message); }
 });
 
