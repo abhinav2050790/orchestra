@@ -289,6 +289,12 @@ wss.on('connection', (ws) => {
 
       case 'hello': {
         let id = (typeof m.id === 'string' && m.id.trim()) ? m.id.trim().slice(0, 64) : rid('a-');
+        // passive observers (cli tail etc.) ride the bus without becoming visible agents
+        if (m.role === 'observer') {
+          ws.agentId = null;
+          send(ws, { t: 'welcome', you: id, ...snapshot() });
+          return;
+        }
         const existing = agents.get(id);
         if (existing && existing.conn && existing.conn !== ws) {
           try { existing.conn.close(4000, 'superseded'); } catch { /* */ }
