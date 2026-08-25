@@ -463,17 +463,66 @@ async function syncCloudFiles() {
 }
 setInterval(syncCloudFiles, 60000);
 
-async function cloudPick() {
-  if (!window.showDirectoryPicker) throw new Error('this browser cannot open a native folder picker — use Chrome/Edge or type the path');
-  const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
-  await idb.set('wsHandle', handle);
-  const r = await fetch('/api/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: 'browser://' + handle.name }) });
+async function registerBrowserWorkspace(name) {
+  const r = await fetch('/api/workspace', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ path: 'browser://' + name }) });
   const j = await r.json();
   if (j.error) throw new Error(j.error);
   applyWorkspace(j);
-  sysNote(`folder "${handle.name}" linked — HANDOFF.md & progress will be written there`);
-  syncCloudFiles();
+  updateSaveBtn();
+  return j;
 }
+
+function downloadText(name, text) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: 'text/markdown' }));
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// browsers without File System Access (Brave/Firefox/Safari) get one-click downloads instead of disk writes
+$('#btn-save-files').addEventListener('click', async () => {
+  try {
+    const md = await (await fetch('/api/handoff')).text();
+    const proj = window.__wsInfo?.project || 'main';
+    downloadText('HANDOFF.md', md);
+    setTimeout(() => downloadText(`${proj}-PROGRESS.md`, md), 400);
+  } catch (e) { alert(e.message); }
+});
+
+async function updateSaveBtn() {
+  const btn = $('#btn-save-files');
+  const ws = window.__wsInfo;
+  if (!isLocalHub && ws?.configured && String(ws.root || '').startsWith('browser://')) {
+    let hasHandle = false;
+    try { hasHandle = !!(await idb.get('wsHandle')); } catch {}
+    btn.hidden = hasHandle; // handle → auto-writes; none → manual downloads
+  } else btn.hidden = true;
+}
+
+async function cloudPick() {
+  if (window.showDirectoryPicker) {
+    const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+    await idb.set('wsHandle', handle);
+    await registerBrowserWorkspace(handle.name);
+    sysNote(`folder "${handle.name}" linked — HANDOFF.md & progress will be written there`);
+    syncCloudFiles();
+    return;
+  }
+  // Brave (blocks File System Access by default), Firefox & Safari: directory input fallback
+  $('#dir-fallback').click();
+}
+
+$('#dir-fallback').addEventListener('change', async (e) => {
+  const rel = e.target.files?.[0]?.webkitRelativePath || '';
+  e.target.value = '';
+  const name = rel.split('/')[0];
+  if (!name) return;
+  try {
+    await registerBrowserWorkspace(name);
+    sysNote(`folder "${name}" linked (download mode) — use ⬇ SAVE FILES to pull HANDOFF.md & progress into it`);
+  } catch (err) { alert(err.message); }
+});
 
 $('#gate-browse').addEventListener('click', async () => {
   const b = $('#gate-browse');
@@ -510,7 +559,7 @@ $('#btn-project').addEventListener('click', async () => {
     const j = await (await fetch('/api/workspace')).json();
     if (j.configured) {
       applyWorkspace(j, true); // returning user — straight in
-      if (!isLocalHub && String(j.root || '').startsWith('browser://')) syncCloudFiles();
+      if (!isLocalHub && String(j.root || '').startsWith('browser://')) { syncCloudFiles(); updateSaveBtn(); }
     } else showGate();
   } catch { showGate(); }
 })();
