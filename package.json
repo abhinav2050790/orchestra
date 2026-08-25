@@ -20,9 +20,10 @@
     "multi-agent",
     "sync"
   ],
-  "license": "ISC",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
-    "@playwright/test": "^1.62.1"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.4",
