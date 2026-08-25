@@ -400,3 +400,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 connect();
+
+// debug/test introspection
+window.__orchestra = { board, terms, agents };
+

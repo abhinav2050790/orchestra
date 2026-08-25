@@ -128,6 +128,8 @@ export class Board {
   }
 
   layout() {
+    // prune traces of agents that have left — otherwise their wires linger forever
+    for (const id of [...this.traces.keys()]) if (!this.agents.has(id)) this.traces.delete(id);
     const cx = this.W / 2, cy = this.H / 2;
     const hub = { x: cx - 82, y: cy - 62, w: 164, h: 124 };
     this.hubRect = hub;
