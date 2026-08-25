@@ -136,7 +136,8 @@ let ws, backoff = 500, totalMsgs = 0;
 const rateWin = [];
 
 function connect() {
-  ws = new WebSocket(`ws://${location.host}/bus`);
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'; // HTTPS pages must use wss — ws is blocked as mixed content
+  ws = new WebSocket(`${proto}://${location.host}/bus`);
   ws.onopen = () => { backoff = 500; setConn(true, 'LINKED'); };
   ws.onclose = () => {
     setConn(false, 'BUS DOWN — retrying');
@@ -175,7 +176,7 @@ function onWelcome(w) {
   renderRoster(); renderTasks(); renderState(Object.entries(w.state));
   totalMsgs = w.stats.totalMsgs;
   $('#st-total').textContent = totalMsgs.toLocaleString();
-  $('#bus-url').textContent = `ws://${location.host}/bus`;
+  $('#bus-url').textContent = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/bus`;
   const recent = w.recent.slice(-120);
   $('#feed').innerHTML = '';
   recent.forEach((e) => feedAdd(e.kind, e.from === 'hub' ? 'HUB' : e.from, e.text || e.key || '', e));
